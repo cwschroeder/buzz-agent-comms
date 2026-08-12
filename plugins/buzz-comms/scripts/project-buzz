@@ -1,0 +1,1019 @@
+#!/usr/bin/env python3
+"""project-buzz — portable Buzz project lifecycle publisher for coding agents.
+
+This is the distributable counterpart to the pilot helper that runs on the Buzz
+owner's host. It carries the same protocol: the same marker format, the same
+content validation and the same duplicate suppression, so messages published
+from a colleague's machine are indistinguishable in shape from the owner's.
+
+Two things differ on purpose:
+
+* The agent name is owned by the local config, not by the caller. It must have
+  the form ``<client>.<person>`` (for example ``claude.stratos``) so a
+  colleague's agent can never post under a bare seat name such as ``claude``.
+* Identity, relay and project mapping come from ``~/.config/buzz-agent``
+  instead of the owner's pilot checkout.
+
+Signing always happens inside the ``buzz`` CLI. This script never implements
+crypto and never prints private key material.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import stat
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+AGENT_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}\.[a-z0-9][a-z0-9_-]{0,31}$")
+UPDATE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+EVENT_ID_RE = re.compile(r"^[0-9a-f]{64}$")
+REPO_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,62}$")
+PUBKEY_RE = re.compile(r"^[0-9a-f]{64}$")
+
+MAX_CONTENT = 4000
+HELPER_VERSION = "0.3.0"
+FORBIDDEN_IN_CONTENT = ("[PILOT-", "[AGENT-")
+LIFECYCLE_PHASES = ("start", "progress", "blocked", "result")
+
+
+class UserError(Exception):
+    """An error the operator can fix; reported without a traceback."""
+
+
+def is_windows() -> bool:
+    """Single seam for platform behaviour, so tests can exercise both paths."""
+    return os.name == "nt"
+
+
+# --------------------------------------------------------------------------
+# configuration and state
+# --------------------------------------------------------------------------
+
+
+def agent_home() -> Path:
+    override = os.environ.get("BUZZ_AGENT_HOME")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".config" / "buzz-agent"
+
+
+def config_path() -> Path:
+    return agent_home() / "config.json"
+
+
+def identity_path() -> Path:
+    return agent_home() / "identity.json"
+
+
+def state_root() -> Path:
+    return agent_home() / "state"
+
+
+def load_config() -> Dict[str, Any]:
+    path = config_path()
+    if not path.is_file():
+        raise UserError(
+            "No Buzz agent config at {0}. Run '/buzz-setup' first.".format(path)
+        )
+    try:
+        config = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as error:
+        raise UserError("Malformed config at {0}: {1}".format(path, error))
+    if not isinstance(config, dict):
+        raise UserError("Config at {0} must be a JSON object".format(path))
+    return config
+
+
+def save_config(config: Dict[str, Any]) -> None:
+    home = agent_home()
+    home.mkdir(parents=True, exist_ok=True)
+    path = config_path()
+    temporary = path.with_suffix(".json.tmp")
+    temporary.write_text(
+        json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    temporary.replace(path)
+
+
+def load_identity() -> Dict[str, str]:
+    path = identity_path()
+    if not path.is_file():
+        raise UserError(
+            "No Buzz agent identity at {0}. Run 'project-buzz provision' first.".format(
+                path
+            )
+        )
+    # POSIX permission bits are meaningless on Windows: os.stat reports 0o666
+    # there regardless of the real ACL, so enforcing them would reject every
+    # identity file. Windows relies on the per-user profile directory instead.
+    if not is_windows():
+        mode = stat.S_IMODE(path.stat().st_mode)
+        if mode & 0o077:
+            raise UserError(
+                "Identity file {0} is readable by others (mode {1:o}). "
+                "Fix with: chmod 600 {0}".format(path, mode)
+            )
+    identity = json.loads(path.read_text(encoding="utf-8"))
+    for key in ("private_key", "public_key", "auth_tag"):
+        if not identity.get(key):
+            raise UserError("Identity file {0} is missing '{1}'".format(path, key))
+    return identity
+
+
+def save_identity(private_key: str, public_key: str, auth_tag: str) -> None:
+    home = agent_home()
+    home.mkdir(parents=True, exist_ok=True)
+    path = identity_path()
+    payload = {
+        "private_key": private_key,
+        "public_key": public_key,
+        "auth_tag": auth_tag,
+    }
+    # Create with restrictive permissions before any content is written.
+    descriptor = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    os.chmod(str(path), 0o600)
+
+
+def agent_name(config: Dict[str, Any]) -> str:
+    name = str(config.get("agent_name") or "").strip()
+    if not name:
+        raise UserError(
+            "config.agent_name is not set. Use '<client>.<person>', e.g. 'claude.stratos'."
+        )
+    if not AGENT_RE.match(name):
+        raise UserError(
+            "Invalid agent_name {0!r}. Required form '<client>.<person>' "
+            "(lowercase letters, digits, '_' and '-'), e.g. 'claude.stratos'. "
+            "The dotted form keeps colleague agents out of the owner's seat ledger.".format(
+                name
+            )
+        )
+    return name
+
+
+def relay_url(config: Dict[str, Any]) -> str:
+    url = str(config.get("relay_url") or "").strip()
+    if not url:
+        raise UserError("config.relay_url is not set")
+    return url.rstrip("/")
+
+
+def desktop_cli_candidates() -> List[Path]:
+    """Where Buzz Desktop installs the bundled `buzz` CLI sidecar.
+
+    Colleagues already run Buzz Desktop, which ships the CLI next to the app
+    binary. Finding it there means nobody has to install a second copy, and the
+    CLI stays in lockstep with the client the relay is talking to.
+    """
+    if is_windows():
+        roots = [
+            os.environ.get("ProgramFiles", r"C:\Program Files"),
+            os.environ.get("ProgramW6432", r"C:\Program Files"),
+            os.environ.get("LOCALAPPDATA", ""),
+        ]
+        names = ["buzz.exe"]
+        paths = []
+        for root in roots:
+            if not root:
+                continue
+            paths.append(Path(root) / "Buzz" / "buzz.exe")
+            paths.append(Path(root) / "Programs" / "Buzz" / "buzz.exe")
+        return paths
+    return [
+        Path("/Applications/Buzz.app/Contents/MacOS/buzz"),
+        Path.home() / "Applications/Buzz.app/Contents/MacOS/buzz",
+        Path("/opt/Buzz/buzz"),
+    ]
+
+
+def resolve_binary(config: Dict[str, Any], key: str, default: str) -> str:
+    configured = str(config.get(key) or "").strip() or default
+    found = shutil.which(configured)
+    if found:
+        return found
+    candidate = Path(configured).expanduser()
+    if candidate.is_file() and os.access(str(candidate), os.X_OK):
+        return str(candidate)
+    if key == "buzz_bin":
+        for fallback in desktop_cli_candidates():
+            if fallback.is_file() and os.access(str(fallback), os.X_OK):
+                return str(fallback)
+    raise UserError(
+        "Cannot find the {0!r} binary (config.{1}). Install the Buzz CLI or set "
+        "an absolute path in {2}.".format(configured, key, config_path())
+    )
+
+
+# --------------------------------------------------------------------------
+# buzz CLI invocation
+# --------------------------------------------------------------------------
+
+
+def run_buzz(
+    config: Dict[str, Any], args: List[str], identity: Optional[Dict[str, str]] = None
+) -> str:
+    """Run the buzz CLI with the agent identity. Returns stdout."""
+    binary = resolve_binary(config, "buzz_bin", "buzz")
+    if identity is None:
+        identity = load_identity()
+    environment = dict(os.environ)
+    environment["BUZZ_RELAY_URL"] = relay_url(config)
+    environment["BUZZ_PRIVATE_KEY"] = identity["private_key"]
+    environment["BUZZ_AUTH_TAG"] = identity["auth_tag"]
+    completed = subprocess.run(
+        [binary] + args,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+    )
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip()
+        raise UserError(
+            "buzz {0} failed (exit {1}): {2}".format(
+                " ".join(args[:2]), completed.returncode, detail
+            )
+        )
+    return completed.stdout
+
+
+def run_plain(binary: str, args: List[str]) -> str:
+    """Run a helper binary without any Buzz identity in the environment."""
+    completed = subprocess.run(
+        [binary] + args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+    )
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip()
+        raise UserError(
+            "{0} failed (exit {1}): {2}".format(
+                Path(binary).name, completed.returncode, detail
+            )
+        )
+    return completed.stdout
+
+
+# --------------------------------------------------------------------------
+# project resolution
+# --------------------------------------------------------------------------
+
+
+def projects(config: Dict[str, Any]) -> Dict[str, Dict[str, str]]:
+    raw = config.get("projects") or {}
+    if not isinstance(raw, dict):
+        raise UserError("config.projects must be a JSON object")
+    return raw
+
+
+def canonical(path: Path) -> str:
+    return str(path.resolve())
+
+
+def resolve_project(
+    config: Dict[str, Any], requested: Optional[str] = None
+) -> Tuple[str, str]:
+    """Return (repo_id, channel_id) for an explicit repo id or the cwd."""
+    registered = projects(config)
+
+    if requested:
+        if not REPO_ID_RE.match(requested):
+            raise UserError("Invalid repo id: {0}".format(requested))
+        for entry in registered.values():
+            if entry.get("repo_id") == requested:
+                return requested, entry["channel_id"]
+        raise UserError(
+            "Project {0!r} is not registered. Run: project-buzz register {0}".format(
+                requested
+            )
+        )
+
+    current = Path.cwd().resolve()
+    best_path = None
+    best_entry = None
+    for raw_path, entry in registered.items():
+        try:
+            workspace = Path(raw_path).expanduser().resolve()
+        except OSError:
+            continue
+        if current == workspace or workspace in current.parents:
+            # Longest matching prefix wins, so nested checkouts resolve correctly.
+            if best_path is None or len(str(workspace)) > len(str(best_path)):
+                best_path = workspace
+                best_entry = entry
+    if best_entry is not None:
+        return best_entry["repo_id"], best_entry["channel_id"]
+
+    raise UserError(
+        "No Buzz project channel registered for {0}. Pass a repo id explicitly "
+        "or run: project-buzz register <repo-id>".format(current)
+    )
+
+
+def member_channels(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    output = run_buzz(config, ["channels", "list", "--member"])
+    try:
+        channels = json.loads(output or "[]")
+    except ValueError as error:
+        raise UserError("Could not parse channel list from buzz: {0}".format(error))
+    if not isinstance(channels, list):
+        raise UserError("Unexpected channel list payload from buzz")
+    return channels
+
+
+# --------------------------------------------------------------------------
+# validation and publishing
+# --------------------------------------------------------------------------
+
+
+def validate_update_id(update_id: str) -> str:
+    if not UPDATE_ID_RE.match(update_id):
+        raise UserError("Invalid update ID: {0}".format(update_id))
+    return update_id
+
+
+def validate_root_event(event_id: str) -> str:
+    if not EVENT_ID_RE.match(event_id):
+        raise UserError("Invalid Buzz root event ID: {0}".format(event_id))
+    return event_id
+
+
+def validate_content(content: str) -> str:
+    if not content or len(content) > MAX_CONTENT:
+        raise UserError(
+            "Buzz project update must contain 1-{0} characters "
+            "(got {1})".format(MAX_CONTENT, len(content))
+        )
+    for forbidden in FORBIDDEN_IN_CONTENT:
+        if forbidden in content:
+            raise UserError(
+                "Buzz project update must not contain {0!r}: it would inject a "
+                "protocol marker".format(forbidden)
+            )
+    return content
+
+
+def strip_code_regions(content: str) -> str:
+    """Remove fenced and inline code before checking human-readable mentions."""
+    visible = []
+    fenced = False
+    for line in content.splitlines():
+        if line.lstrip().startswith("```"):
+            fenced = not fenced
+            continue
+        if not fenced:
+            visible.append(re.sub(r"`[^`]*`", " ", line))
+    return "\n".join(visible)
+
+
+def channel_identity_names(
+    config: Dict[str, Any], channel_id: str
+) -> Optional[List[str]]:
+    """Resolve current channel display names, or None when resolution is unsafe."""
+    try:
+        raw_members = run_buzz(
+            config, ["channels", "members", "--channel", channel_id]
+        )
+        members = json.loads(raw_members or "[]")
+        if not isinstance(members, list) or not all(
+            isinstance(pubkey, str) and PUBKEY_RE.match(pubkey) for pubkey in members
+        ):
+            return None
+        if not members:
+            return None
+
+        arguments = ["--format", "compact", "users", "get"]
+        for pubkey in members:
+            arguments += ["--pubkey", pubkey]
+        raw_profiles = run_buzz(config, arguments)
+        profiles = json.loads(raw_profiles or "[]")
+        if not isinstance(profiles, list):
+            return None
+    except (UserError, ValueError):
+        return None
+
+    names = []
+    for profile in profiles:
+        if not isinstance(profile, dict):
+            continue
+        name = str(profile.get("display_name") or profile.get("name") or "").strip()
+        if name:
+            names.append(name)
+    return names
+
+
+def validate_mentions(config: Dict[str, Any], channel_id: str, content: str) -> str:
+    """Reject real channel-identity mentions while allowing technical at-signs."""
+    visible = strip_code_regions(content)
+    if "@" not in visible:
+        return content
+
+    names = channel_identity_names(config, channel_id)
+    if names is None:
+        raise UserError(
+            "Could not resolve channel identities safely. Retry when Buzz user "
+            "lookup is available; technical '@' text cannot be published until then."
+        )
+
+    lowered = visible.casefold()
+    for name in names:
+        if "@{0}".format(name.casefold()) in lowered:
+            raise UserError(
+                "Buzz project update must not mention channel identity @{0}".format(name)
+            )
+    return content
+
+
+def build_marker(phase: str, agent: str, update_id: str) -> str:
+    if phase == "start":
+        return "[AGENT-ACTIVITY:started:{0}:{1}]".format(agent, update_id)
+    if phase == "result":
+        return "[AGENT-RESULT:{0}:{1}]".format(agent, update_id)
+    return "[AGENT-ACTIVITY:{0}:{1}:{2}]".format(phase, agent, update_id)
+
+
+def lock_directory(repo_id: str, agent: str, phase: str, update_id: str) -> Path:
+    root = state_root() / "publishes"
+    root.mkdir(parents=True, exist_ok=True)
+    return root / "{0}-{1}-{2}-{3}.lock".format(repo_id, agent, phase, update_id)
+
+
+def publish(
+    config: Dict[str, Any],
+    phase: str,
+    update_id: str,
+    content: str,
+    reply_to: Optional[str],
+    requested_repo: Optional[str],
+) -> Dict[str, Any]:
+    agent = agent_name(config)
+    validate_update_id(update_id)
+    validate_content(content)
+    if reply_to is not None:
+        validate_root_event(reply_to)
+    repo_id, channel_id = resolve_project(config, requested_repo)
+    validate_mentions(config, channel_id, content)
+
+    lock = lock_directory(repo_id, agent, phase, update_id)
+    stored = lock / "output.json"
+    try:
+        lock.mkdir()
+    except FileExistsError:
+        if stored.is_file() and stored.stat().st_size > 0:
+            previous = json.loads(stored.read_text(encoding="utf-8"))
+            previous["duplicate"] = True
+            return previous
+        return {
+            "accepted": True,
+            "duplicate": True,
+            "message": "project update already published",
+        }
+
+    marker = build_marker(phase, agent, update_id)
+    args = [
+        "messages",
+        "send",
+        "--channel",
+        channel_id,
+        "--content",
+        "{0} {1}".format(marker, content),
+    ]
+    if reply_to:
+        args += ["--reply-to", reply_to]
+
+    try:
+        output = run_buzz(config, args)
+    except Exception:
+        # Keep the lock free so the documented same-ID retry can succeed.
+        try:
+            lock.rmdir()
+        except OSError:
+            pass
+        raise
+
+    try:
+        payload = json.loads(output or "{}")
+    except ValueError:
+        payload = {"accepted": True, "raw": output.strip()}
+
+    event_id = payload.get("event_id")
+    payload.update(
+        {
+            "repo_id": repo_id,
+            "agent": agent,
+            "phase": phase,
+            "channel_id": channel_id,
+            "buzz_url": (
+                "buzz://message?channel={0}&id={1}".format(channel_id, event_id)
+                if event_id
+                else None
+            ),
+        }
+    )
+    stored.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    return payload
+
+
+def publish_attachments(
+    config: Dict[str, Any],
+    update_id: str,
+    content: str,
+    files: List[str],
+    requested_repo: Optional[str],
+) -> Dict[str, Any]:
+    """Publish privacy-reviewed files as one top-level project-channel post."""
+    agent = agent_name(config)
+    validate_update_id(update_id)
+    validate_content(content)
+    repo_id, channel_id = resolve_project(config, requested_repo)
+    validate_mentions(config, channel_id, content)
+
+    resolved_files = []
+    for raw_path in files:
+        path = Path(raw_path).expanduser().resolve()
+        if not path.is_file():
+            raise UserError("Attachment is not a readable file: {0}".format(path))
+        resolved_files.append(path)
+
+    lock = lock_directory(repo_id, agent, "attachment", update_id)
+    stored = lock / "output.json"
+    try:
+        lock.mkdir()
+    except FileExistsError:
+        if stored.is_file() and stored.stat().st_size > 0:
+            previous = json.loads(stored.read_text(encoding="utf-8"))
+            previous["duplicate"] = True
+            return previous
+        return {
+            "accepted": True,
+            "duplicate": True,
+            "message": "project attachment already published",
+        }
+
+    args = [
+        "messages",
+        "send",
+        "--channel",
+        channel_id,
+        "--content",
+        content,
+    ]
+    for path in resolved_files:
+        args += ["--file", str(path)]
+
+    try:
+        output = run_buzz(config, args)
+    except Exception:
+        try:
+            lock.rmdir()
+        except OSError:
+            pass
+        raise
+
+    try:
+        payload = json.loads(output or "{}")
+    except ValueError:
+        payload = {"accepted": True, "raw": output.strip()}
+
+    event_id = payload.get("event_id")
+    payload.update(
+        {
+            "repo_id": repo_id,
+            "agent": agent,
+            "phase": "attachment",
+            "channel_id": channel_id,
+            "file_count": len(resolved_files),
+            "buzz_url": (
+                "buzz://message?channel={0}&id={1}".format(channel_id, event_id)
+                if event_id
+                else None
+            ),
+        }
+    )
+    stored.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    return payload
+
+
+# --------------------------------------------------------------------------
+# commands
+# --------------------------------------------------------------------------
+
+
+def command_install(arguments: argparse.Namespace) -> int:
+    """Copy this helper to a stable path so callers never guess a plugin dir."""
+    source = Path(__file__).resolve()
+    target_dir = agent_home() / "bin"
+    target = target_dir / "project-buzz"
+
+    if arguments.check:
+        up_to_date = target.is_file() and target.read_bytes() == source.read_bytes()
+        print(
+            json.dumps(
+                {
+                    "accepted": True,
+                    "version": HELPER_VERSION,
+                    "installed": str(target) if target.is_file() else None,
+                    "up_to_date": up_to_date,
+                },
+                indent=2,
+            )
+        )
+        return 0 if up_to_date else 1
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    if target.resolve() != source:
+        shutil.copyfile(str(source), str(target))
+    target.chmod(0o755)
+
+    if is_windows():
+        # Windows does not honour the shebang, so ship a launcher that makes the
+        # documented call work from cmd, PowerShell and Git Bash alike.
+        launcher = target_dir / "project-buzz.cmd"
+        launcher.write_text(
+            '@echo off\r\npython "%~dp0project-buzz" %*\r\n', encoding="utf-8"
+        )
+
+    on_path = shutil.which("project-buzz") == str(target)
+    print(
+        json.dumps(
+            {
+                "accepted": True,
+                "version": HELPER_VERSION,
+                "installed": str(target),
+                "on_path": on_path,
+                "hint": (
+                    "Call the helper by this absolute path, or add {0} to PATH.".format(
+                        target_dir
+                    )
+                ),
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def owner_private_key() -> str:
+    """Read the owner's key from the environment or an interactive prompt."""
+    secret = os.environ.get("BUZZ_OWNER_PRIVATE_KEY", "").strip()
+    if secret:
+        return secret
+    if sys.stdin.isatty():
+        import getpass
+
+        secret = getpass.getpass(
+            "Your own Buzz (human) private key, used locally only: "
+        ).strip()
+        if secret:
+            return secret
+    raise UserError(
+        "No owner key given, and this shell offers no terminal to prompt on. "
+        "On Windows that is usually Git Bash: mintty hands Python a pipe, so "
+        "the hidden prompt never opens. Either run the same command from cmd "
+        "or PowerShell, or prefix it with `winpty`, or set "
+        "BUZZ_OWNER_PRIVATE_KEY for this one call. The key signs the NIP-OA "
+        "owner attestation locally and is never stored or transmitted."
+    )
+
+
+def command_provision(arguments: argparse.Namespace) -> int:
+    config = load_config()
+    owner_secret = owner_private_key()
+
+    if identity_path().is_file() and not arguments.force:
+        raise UserError(
+            "An agent identity already exists at {0}. Pass --force to replace "
+            "it (the old agent keeps its channel memberships and would need to "
+            "be re-granted).".format(identity_path())
+        )
+
+    admin_binary = resolve_binary(config, "buzz_admin_bin", "buzz-admin")
+    auth_tag_binary = resolve_binary(config, "auth_tag_bin", "compute_auth_tag")
+
+    generated = run_plain(admin_binary, ["generate-key"])
+    secret = ""
+    public = ""
+    for line in generated.splitlines():
+        if "Secret key:" in line:
+            secret = line.split("Secret key:", 1)[1].strip()
+        elif "Public key:" in line:
+            public = line.split("Public key:", 1)[1].strip()
+    if not secret or not public:
+        raise UserError("Could not parse the generated keypair from buzz-admin")
+
+    auth_tag = run_plain(auth_tag_binary, [owner_secret, public]).strip()
+    if not auth_tag:
+        raise UserError("compute_auth_tag returned an empty auth tag")
+
+    save_identity(secret, public, auth_tag)
+    identity = {"private_key": secret, "public_key": public, "auth_tag": auth_tag}
+
+    # Publishing the signed profile is what materializes the owner attestation
+    # on the relay, exactly as the owner-side pilot does.
+    run_buzz(
+        config,
+        [
+            "users",
+            "set-profile",
+            "--name",
+            arguments.display_name,
+            "--about",
+            arguments.about,
+        ],
+        identity=identity,
+    )
+
+    print(
+        json.dumps(
+            {
+                "accepted": True,
+                "public_key": public,
+                "identity_file": str(identity_path()),
+                "next_step": (
+                    "Send this public key to the Buzz owner and ask for a grant "
+                    "on the projects you work on."
+                ),
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def command_register(arguments: argparse.Namespace) -> int:
+    config = load_config()
+    repo_id = arguments.repo_id
+    if not REPO_ID_RE.match(repo_id):
+        raise UserError("Invalid repo id: {0}".format(repo_id))
+
+    workspace = Path(arguments.path or ".").expanduser()
+    if not workspace.is_dir():
+        raise UserError("Not a directory: {0}".format(workspace))
+
+    channel_id = arguments.channel
+    if not channel_id:
+        channels = member_channels(config)
+        expected = "{0}-agent".format(repo_id)
+        matches = [c for c in channels if c.get("name") == expected]
+        if not matches:
+            available = ", ".join(sorted(str(c.get("name")) for c in channels)) or "none"
+            raise UserError(
+                "No channel named {0!r} is visible to this agent identity. "
+                "Ask the Buzz owner to grant access, or pass --channel <uuid>. "
+                "Visible channels: {1}".format(expected, available)
+            )
+        if len(matches) > 1:
+            raise UserError(
+                "Several channels are named {0!r}; pass --channel <uuid>".format(expected)
+            )
+        channel_id = matches[0]["channel_id"]
+
+    registered = projects(config)
+    registered[canonical(workspace)] = {"repo_id": repo_id, "channel_id": channel_id}
+    config["projects"] = registered
+    save_config(config)
+
+    print(
+        json.dumps(
+            {
+                "accepted": True,
+                "repo_id": repo_id,
+                "channel_id": channel_id,
+                "workspace": canonical(workspace),
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def command_resolve(arguments: argparse.Namespace) -> int:
+    config = load_config()
+    repo_id, channel_id = resolve_project(config, arguments.repo_id)
+    print(
+        json.dumps(
+            {
+                "repo_id": repo_id,
+                "channel_id": channel_id,
+                "agent": agent_name(config),
+            }
+        )
+    )
+    return 0
+
+
+def command_context(arguments: argparse.Namespace) -> int:
+    config = load_config()
+    repo_id = arguments.repo_id
+    limit = arguments.limit
+    # 'context 15' means a limit, not a repo id: no repo id is ever all digits.
+    if repo_id is not None and repo_id.isdigit():
+        if limit is not None:
+            raise UserError("Give at most one numeric argument to 'context'")
+        limit = int(repo_id)
+        repo_id = None
+    if limit is None:
+        limit = 20
+    _, channel_id = resolve_project(config, repo_id)
+    if limit < 1 or limit > 200:
+        raise UserError("Buzz message limit must be between 1 and 200")
+    sys.stdout.write(
+        run_buzz(
+            config,
+            ["messages", "get", "--channel", channel_id, "--limit", str(limit)],
+        )
+    )
+    return 0
+
+
+def command_lifecycle(arguments: argparse.Namespace) -> int:
+    config = load_config()
+    phase = arguments.phase
+    reply_to = None if phase == "start" else arguments.root_event_id
+    payload = publish(
+        config,
+        phase,
+        arguments.update_id,
+        arguments.content,
+        reply_to,
+        arguments.repo_id,
+    )
+    print(json.dumps(payload))
+    return 0
+
+
+def command_attach(arguments: argparse.Namespace) -> int:
+    config = load_config()
+    payload = publish_attachments(
+        config,
+        arguments.update_id,
+        arguments.content,
+        arguments.files,
+        arguments.repo_id,
+    )
+    print(json.dumps(payload))
+    return 0
+
+
+def command_doctor(_: argparse.Namespace) -> int:
+    findings = [("helper_version", "ok", HELPER_VERSION)]
+    ok = True
+
+    try:
+        config = load_config()
+        findings.append(("config", "ok", str(config_path())))
+    except UserError as error:
+        print(json.dumps({"ok": False, "checks": [["config", "fail", str(error)]]}, indent=2))
+        return 1
+
+    for key, default in (
+        ("buzz_bin", "buzz"),
+        ("buzz_admin_bin", "buzz-admin"),
+        ("auth_tag_bin", "compute_auth_tag"),
+    ):
+        try:
+            findings.append((key, "ok", resolve_binary(config, key, default)))
+        except UserError as error:
+            # Only the buzz CLI is needed for day-to-day publishing.
+            severity = "fail" if key == "buzz_bin" else "warn"
+            ok = ok and severity != "fail"
+            findings.append((key, severity, str(error)))
+
+    installed = agent_home() / "bin" / "project-buzz"
+    if installed.is_file() and os.access(str(installed), os.X_OK):
+        findings.append(("helper", "ok", str(installed)))
+    else:
+        findings.append(
+            ("helper", "warn", "not installed at {0}; run 'install'".format(installed))
+        )
+
+    try:
+        findings.append(("agent_name", "ok", agent_name(config)))
+    except UserError as error:
+        ok = False
+        findings.append(("agent_name", "fail", str(error)))
+
+    try:
+        identity = load_identity()
+        findings.append(("identity", "ok", identity["public_key"]))
+    except UserError as error:
+        ok = False
+        findings.append(("identity", "fail", str(error)))
+        print(json.dumps({"ok": ok, "checks": findings}, indent=2))
+        return 1
+
+    try:
+        channels = member_channels(config)
+        names = sorted(str(c.get("name")) for c in channels)
+        findings.append(("relay", "ok", "{0} member channels".format(len(channels))))
+        findings.append(("channels", "ok", ", ".join(names) or "none"))
+    except UserError as error:
+        ok = False
+        findings.append(("relay", "fail", str(error)))
+        channels = []
+
+    visible = {str(c.get("channel_id")) for c in channels}
+    for workspace, entry in sorted(projects(config).items()):
+        label = "project:{0}".format(entry.get("repo_id"))
+        if not channels:
+            findings.append((label, "warn", "relay unreachable, not checked"))
+        elif entry.get("channel_id") in visible:
+            findings.append((label, "ok", workspace))
+        else:
+            ok = False
+            findings.append(
+                (label, "fail", "channel not visible to this agent: {0}".format(workspace))
+            )
+
+    print(json.dumps({"ok": ok, "checks": findings}, indent=2))
+    return 0 if ok else 1
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="project-buzz",
+        description="Publish coding-agent lifecycle updates to a Buzz project channel.",
+    )
+    parser.add_argument("--version", action="version", version=HELPER_VERSION)
+    sub = parser.add_subparsers(dest="command")
+
+    install = sub.add_parser("install", help="Copy this helper to a stable local path")
+    install.add_argument(
+        "--check",
+        action="store_true",
+        help="Check whether the installed helper exactly matches this plugin version",
+    )
+    install.set_defaults(handler=command_install)
+
+    provision = sub.add_parser("provision", help="Create this machine's agent identity")
+    provision.add_argument("--display-name", required=True)
+    provision.add_argument("--about", default="Coding agent reporting through Buzz")
+    provision.add_argument("--force", action="store_true")
+    provision.set_defaults(handler=command_provision)
+
+    register = sub.add_parser("register", help="Map a local workspace to a project channel")
+    register.add_argument("repo_id")
+    register.add_argument("--path", default=None)
+    register.add_argument("--channel", default=None)
+    register.set_defaults(handler=command_register)
+
+    resolve = sub.add_parser("resolve", help="Show the project for the current directory")
+    resolve.add_argument("repo_id", nargs="?", default=None)
+    resolve.set_defaults(handler=command_resolve)
+
+    context = sub.add_parser("context", help="Read recent project messages")
+    context.add_argument("repo_id", nargs="?", default=None)
+    context.add_argument("limit", nargs="?", type=int, default=None)
+    context.set_defaults(handler=command_context)
+
+    for phase in LIFECYCLE_PHASES:
+        lifecycle = sub.add_parser(phase, help="Publish a {0} update".format(phase))
+        lifecycle.add_argument("update_id")
+        if phase != "start":
+            lifecycle.add_argument("root_event_id")
+        lifecycle.add_argument("content")
+        lifecycle.add_argument("repo_id", nargs="?", default=None)
+        lifecycle.set_defaults(handler=command_lifecycle, phase=phase)
+
+    attach = sub.add_parser(
+        "attach", help="Publish files as one top-level project-channel post"
+    )
+    attach.add_argument("update_id")
+    attach.add_argument("content")
+    attach.add_argument("files", nargs="+")
+    attach.add_argument("--repo-id", default=None)
+    attach.set_defaults(handler=command_attach)
+
+    doctor = sub.add_parser("doctor", help="Verify config, identity and channel access")
+    doctor.set_defaults(handler=command_doctor)
+
+    return parser
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    parser = build_parser()
+    arguments = parser.parse_args(argv)
+    if not getattr(arguments, "handler", None):
+        parser.print_help(sys.stderr)
+        return 2
+    try:
+        return arguments.handler(arguments)
+    except UserError as error:
+        sys.stderr.write("{0}\n".format(error))
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

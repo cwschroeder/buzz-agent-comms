@@ -1,0 +1,8 @@
+{
+  "name": "buzz-comms",
+  "version": "0.3.0",
+  "description": "Coordinate project work in Buzz and prove user-visible delivery with live checks and screenshots.",
+  "author": {
+    "name": "Christian Schröder"
+  }
+}
