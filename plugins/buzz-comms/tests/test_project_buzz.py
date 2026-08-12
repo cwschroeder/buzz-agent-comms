@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -553,6 +554,26 @@ class PolicyContract(unittest.TestCase):
             "before the final user response",
         ):
             self.assertIn(phrase, skill)
+
+    def test_plugin_commands_are_documented_with_namespace(self):
+        repository = SCRIPTS.parents[2]
+        paths = (
+            repository / "README.md",
+            repository / "CLAUDE.md",
+            SCRIPTS / "project-buzz",
+            SCRIPTS.parent / "commands" / "buzz-status.md",
+            SCRIPTS.parent / "skills" / "buzz-team-communication" / "SKILL.md",
+        )
+        bare_command = re.compile(r"(?<!:)/buzz-(?:setup|status)\b")
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertIsNone(
+                    bare_command.search(path.read_text(encoding="utf-8"))
+                )
+
+        readme = (repository / "README.md").read_text(encoding="utf-8")
+        self.assertIn("/buzz-comms:buzz-setup", readme)
+        self.assertIn("/buzz-comms:buzz-status", readme)
 
 
 class IdentityPermissions(HelperTestCase):

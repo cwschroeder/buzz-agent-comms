@@ -30,9 +30,10 @@ deduplizierte Buzz-Nachrichten.
 | Komponente | Aufgabe |
 |---|---|
 | `buzz-team-communication` | Verbindlicher Kommunikations- und Delivery-Proof-Workflow |
+| `no-ai-slop` | Redigiert jeden Lifecycle-Text, bevor er im Kanal landet |
 | `scripts/project-buzz` | Portabler Python-Helper für Identität, Routing, Lifecycle und Anhänge |
-| `/buzz-setup` | Geführte Einrichtung |
-| `/buzz-status` | Read-only Diagnose, Versions- und Channel-Check |
+| `/buzz-comms:buzz-setup` | Geführte Einrichtung |
+| `/buzz-comms:buzz-status` | Read-only Diagnose, Versions- und Channel-Check |
 
 Der Helper benötigt nur Python 3.8 oder neuer und die Python-Standardbibliothek.
 
@@ -43,10 +44,10 @@ In Claude Code:
 ```text
 /plugin marketplace add https://github.com/cwschroeder/buzz-agent-comms.git
 /plugin install buzz-comms@buzz-agent-comms
-/buzz-setup
+/buzz-comms:buzz-setup
 ```
 
-`/buzz-setup` kopiert den Helper nach
+`/buzz-comms:buzz-setup` kopiert den Helper nach
 `~/.config/buzz-agent/bin/project-buzz`. Dadurch hängt die Laufzeit nicht vom
 Plugin-Cache ab. Anschließend prüft dieser Befehl die Installation:
 
@@ -54,8 +55,8 @@ Plugin-Cache ab. Anschließend prüft dieser Befehl die Installation:
 ~/.config/buzz-agent/bin/project-buzz doctor
 ```
 
-Nach einem Plugin-Update zeigt `/buzz-status`, ob diese stabile Kopie noch zum
-Plugin passt. Der zugrunde liegende Check ist:
+Nach einem Plugin-Update zeigt `/buzz-comms:buzz-status`, ob diese stabile Kopie
+noch zum Plugin passt. Der zugrunde liegende Check ist:
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/scripts/project-buzz" install --check
@@ -102,7 +103,7 @@ Buzz-Nachrichten oder Support-Anfragen.
 
 ### 1. Konfiguration
 
-`/buzz-setup` legt `~/.config/buzz-agent/config.json` an:
+`/buzz-comms:buzz-setup` legt `~/.config/buzz-agent/config.json` an:
 
 ```json
 {
@@ -234,3 +235,7 @@ Deduplication, Anhänge und Dateirechte.
 ## Lizenz
 
 [MIT](LICENSE)
+
+Der mitgelieferte Skill `no-ai-slop` stammt von Peter Yang und steht ebenfalls
+unter MIT. Seine Lizenzdatei liegt unverändert neben dem Skill unter
+`plugins/buzz-comms/skills/no-ai-slop/LICENSE` und gehört zu jeder Kopie.

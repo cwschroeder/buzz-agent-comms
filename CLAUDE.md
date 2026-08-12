@@ -26,9 +26,13 @@ plugins/buzz-comms/
 ├── .claude-plugin/plugin.json           # plugin manifest (name, version, author)
 ├── skills/buzz-team-communication/
 │   └── SKILL.md                         # the behavioural contract for the agent
+├── skills/no-ai-slop/                   # vendored, MIT, Peter Yang — edits every
+│   ├── SKILL.md                         #   lifecycle text before it is published
+│   ├── eval.md                          #   the post-edit checklist
+│   └── LICENSE                          #   keep this file with any copy
 ├── commands/
-│   ├── buzz-setup.md                    # /buzz-setup: guided onboarding
-│   └── buzz-status.md                   # /buzz-status: read-only diagnostics
+│   ├── buzz-setup.md                    # /buzz-comms:buzz-setup: guided onboarding
+│   └── buzz-status.md                   # /buzz-comms:buzz-status: read-only diagnostics
 ├── scripts/project-buzz                 # the deterministic helper (Python 3.8+)
 └── tests/test_project_buzz.py           # unittest suite, runs without a relay
 README.md                                # operator and colleague documentation (German)

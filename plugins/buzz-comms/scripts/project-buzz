@@ -38,7 +38,7 @@ REPO_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,62}$")
 PUBKEY_RE = re.compile(r"^[0-9a-f]{64}$")
 
 MAX_CONTENT = 4000
-HELPER_VERSION = "0.3.0"
+HELPER_VERSION = "0.4.1"
 FORBIDDEN_IN_CONTENT = ("[PILOT-", "[AGENT-")
 LIFECYCLE_PHASES = ("start", "progress", "blocked", "result")
 
@@ -80,7 +80,9 @@ def load_config() -> Dict[str, Any]:
     path = config_path()
     if not path.is_file():
         raise UserError(
-            "No Buzz agent config at {0}. Run '/buzz-setup' first.".format(path)
+            "No Buzz agent config at {0}. Run '/buzz-comms:buzz-setup' first.".format(
+                path
+            )
         )
     try:
         config = json.loads(path.read_text(encoding="utf-8"))

@@ -9,8 +9,8 @@ Buzz is the durable communication layer for the team's coding agents. Every
 registered project has one private channel that humans and agents share. Read it
 before you change anything, and publish your own work lifecycle into it.
 
-Use the deterministic helper. `/buzz-setup` installs it at a stable path, so
-always call it there:
+Use the deterministic helper. `/buzz-comms:buzz-setup` installs it at a stable
+path, so always call it there:
 
 ```
 ~/.config/buzz-agent/bin/project-buzz
@@ -18,7 +18,8 @@ always call it there:
 
 If `BUZZ_AGENT_HOME` is set, the helper lives in `$BUZZ_AGENT_HOME/bin` instead.
 If that path does not exist, reporting is not set up: tell the user to run
-`/buzz-setup` rather than hunting for the script inside the plugin directory.
+`/buzz-comms:buzz-setup` rather than hunting for the script inside the plugin
+directory.
 
 **On Windows, never call the helper bare.** The shebang resolves `python3`,
 which on a stock Windows box is the Microsoft Store placeholder and dies with
@@ -42,8 +43,8 @@ matches the installed plugin:
 
 If the check reports drift, run the same command without `--check`, then repeat
 the check. This keeps marketplace updates and the copied stable helper in sync.
-If `CLAUDE_PLUGIN_ROOT` is unavailable, run `/buzz-status` and report that source
-drift could not be checked.
+If `CLAUDE_PLUGIN_ROOT` is unavailable, run `/buzz-comms:buzz-status` and report
+that source drift could not be checked.
 
 ## Mandatory workflow
 
@@ -140,6 +141,12 @@ fleet seats; the helper rejects it.
   addresses, and at-signs inside code regions.
 - Publish only reader-ready results. Keep internal reasoning, tool-by-tool
   narration, retry diaries, and English scratch text out of the channel.
+- Edit every lifecycle text with the `no-ai-slop` skill that ships next to this
+  one before publishing it. A channel message is read by colleagues and stays in
+  the audit history, so it has to read like a person wrote it: no throat-clearing
+  openers, no "not X, but Y" contrasts, no importance puffery, no summary
+  endings. Name the file, the commit, the measurement. Its `eval.md` is the
+  checklist to run against your draft.
 - In German updates, use real German umlauts and `ß`. Do not write `ae`, `oe`,
   `ue`, or `ss` as substitutes except inside technical identifiers, paths,
   commands, or quoted source text.
@@ -160,6 +167,6 @@ fleet seats; the helper rejects it.
 per-project channel access. If the identity or a grant is missing, tell the user
 which step is open instead of working around the reporting requirement:
 
-- no config or identity: run `/buzz-setup`
+- no config or identity: run `/buzz-comms:buzz-setup`
 - identity exists but a channel is not visible: the Buzz owner still has to grant
   access for that repository to this agent's public key

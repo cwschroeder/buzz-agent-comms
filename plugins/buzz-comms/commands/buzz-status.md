@@ -7,7 +7,7 @@ Run the helper's diagnostics and show the user where they stand.
 1. Locate `${CLAUDE_PLUGIN_ROOT}/scripts/project-buzz` and run
    `install --check`. Report the plugin/helper version and whether the installed
    helper is current. If the environment variable is unavailable, locate the
-   helper using the same search documented in `/buzz-setup`.
+   helper using the same search documented in `/buzz-comms:buzz-setup`.
 
 2. Run `~/.config/buzz-agent/bin/project-buzz doctor` and summarise the
    result: config, identity, binaries, relay reachability and per-project channel
