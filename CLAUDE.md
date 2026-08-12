@@ -146,8 +146,10 @@ change these without changing the owner side in lockstep:
   both paths. Do not scatter `os.name` checks.
 - Every behavioural change to the helper needs a test in
   `tests/test_project_buzz.py`. The suite must keep running without a relay.
-- **Version bumps touch both manifests**: `.claude-plugin/marketplace.json` and
-  `plugins/buzz-comms/.claude-plugin/plugin.json` must stay in sync.
+- **Version bumps touch three places**: `.claude-plugin/marketplace.json`,
+  `plugins/buzz-comms/.claude-plugin/plugin.json` and `HELPER_VERSION` in
+  `scripts/project-buzz`. The drift test fails on any of the three, and the
+  helper is the one that gets forgotten.
 - Never invent download URLs, package versions or checksums. This repository
   does not distribute Buzz binaries.
 
