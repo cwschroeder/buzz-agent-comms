@@ -11,6 +11,8 @@ Run with:  python3 -m unittest discover -s plugins/buzz-comms/tests
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import re
@@ -40,6 +42,9 @@ with open(log, "a", encoding="utf-8") as handle:
     handle.write(json.dumps(sys.argv[1:]) + "\\n")
 if os.environ.get("FAKE_BUZZ_FAIL") == "1":
     sys.stderr.write("relay unavailable\\n")
+    sys.exit(2)
+if os.environ.get("FAKE_BUZZ_MEMBERSHIP_DENIED") == "1":
+    sys.stderr.write("relay error 403: relay_membership_required\\n")
     sys.exit(2)
 if sys.argv[1:3] == ["channels", "list"]:
     print(json.dumps([
@@ -107,9 +112,11 @@ class HelperTestCase(unittest.TestCase):
         os.environ["FAKE_BUZZ_LOG"] = str(self.log)
         os.environ.pop("FAKE_BUZZ_FAIL", None)
         os.environ.pop("FAKE_BUZZ_BAD_PROFILES", None)
+        os.environ.pop("FAKE_BUZZ_MEMBERSHIP_DENIED", None)
         self.addCleanup(os.environ.pop, "BUZZ_AGENT_HOME", None)
         self.addCleanup(os.environ.pop, "FAKE_BUZZ_LOG", None)
         self.addCleanup(os.environ.pop, "FAKE_BUZZ_BAD_PROFILES", None)
+        self.addCleanup(os.environ.pop, "FAKE_BUZZ_MEMBERSHIP_DENIED", None)
 
         self.write_config()
         self.write_identity()
@@ -541,6 +548,41 @@ class Install(HelperTestCase):
         self.assertEqual(project_buzz.HELPER_VERSION, plugin["version"])
 
 
+class RelayMembershipDiagnostics(HelperTestCase):
+    """A 403 from a members-only relay must name the missing grant.
+
+    Without this the operator sees a bare relay error at the first command that
+    touches the relay, two steps before the setup guide mentions the owner.
+    """
+
+    def test_denied_membership_names_the_owner_command(self):
+        os.environ["FAKE_BUZZ_MEMBERSHIP_DENIED"] = "1"
+        config = project_buzz.load_config()
+        with self.assertRaises(project_buzz.UserError) as caught:
+            project_buzz.member_channels(config)
+        message = str(caught.exception)
+        self.assertIn("relay_membership_required", message)
+        self.assertIn("buzz-admin add-member", message)
+
+    def test_doctor_reports_the_explanation(self):
+        os.environ["FAKE_BUZZ_MEMBERSHIP_DENIED"] = "1"
+        os.chdir(self.workspace)
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            self.assertEqual(1, self.run_cli(["doctor"]))
+        self.assertIn("buzz-admin add-member", stdout.getvalue())
+
+    def test_an_unrelated_failure_stays_unexplained(self):
+        # The hint keys on the relay's error code, so a plain outage must not
+        # send the operator chasing a membership that is already there.
+        os.environ["FAKE_BUZZ_FAIL"] = "1"
+        self.addCleanup(os.environ.pop, "FAKE_BUZZ_FAIL", None)
+        config = project_buzz.load_config()
+        with self.assertRaises(project_buzz.UserError) as caught:
+            project_buzz.member_channels(config)
+        self.assertNotIn("buzz-admin add-member", str(caught.exception))
+
+
 class PolicyContract(unittest.TestCase):
     def test_skill_requires_reader_ready_german_and_final_screenshot_evidence(self):
         skill = (
@@ -574,6 +616,28 @@ class PolicyContract(unittest.TestCase):
         readme = (repository / "README.md").read_text(encoding="utf-8")
         self.assertIn("/buzz-comms:buzz-setup", readme)
         self.assertIn("/buzz-comms:buzz-status", readme)
+
+    def test_relay_admission_is_documented_before_the_agent_identity(self):
+        repository = SCRIPTS.parents[2]
+        setup = (SCRIPTS.parent / "commands" / "buzz-setup.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("buzz-admin add-member", setup)
+        self.assertLess(
+            setup.index("buzz-admin add-member"),
+            setup.index("project-buzz provision"),
+            "relay membership must be settled before provisioning touches the relay",
+        )
+
+        readme = (repository / "README.md").read_text(encoding="utf-8")
+        self.assertIn("Runbook für den Buzz-Owner", readme)
+        for command in (
+            "buzz-admin add-member",
+            "buzz channels add-member",
+            "buzz channels remove-member",
+            "buzz-admin remove-member",
+        ):
+            self.assertIn(command, readme)
 
 
 class IdentityPermissions(HelperTestCase):

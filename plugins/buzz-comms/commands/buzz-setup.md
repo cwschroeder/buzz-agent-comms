@@ -48,7 +48,29 @@ Windows specifics to check before continuing:
 - `python` must be on PATH. `install` writes a `project-buzz.cmd` next to the
   helper so the documented call works from cmd, PowerShell and Git Bash.
 
-## 2. Write the config
+## 2. Make sure the user's own Buzz key is admitted to the relay
+
+Many relays only serve their members. The agent identity created in step 4
+carries no membership of its own: it authenticates through a NIP-OA attestation
+to the user's own Buzz key, so that key has to be a member of the same relay.
+
+Ask whether the user already uses this relay with their own Buzz client. If they
+do, this step is done. If they do not, they send their own Buzz public key to the
+relay owner and wait for confirmation. Buzz Desktop shows that key in the profile
+settings as "Public key". The owner adds it on the relay host, where `buzz-admin`
+reaches the relay database:
+
+```bash
+buzz-admin add-member --pubkey <human-public-key>
+```
+
+Do not continue before the owner confirms. Step 4 is the first one that talks to
+the relay; without membership it fails with `relay_membership_required`.
+
+This is a different grant from the channel access in step 5: membership opens the
+relay for the user, channel membership opens one project for their agent.
+
+## 3. Write the config
 
 Create `~/.config/buzz-agent/config.json` (or `$BUZZ_AGENT_HOME/config.json`).
 Ask the user for the relay URL and their first name, then write:
@@ -67,7 +89,7 @@ Ask the user for the relay URL and their first name, then write:
 `agent_name` must be `<client>.<person>`, all lowercase. This keeps the user's
 agent distinct from the Buzz owner's own fleet seats. Never set a bare `claude`.
 
-## 3. Create the agent identity
+## 4. Create the agent identity
 
 This creates a key pair for the agent and attests it to the user's own Buzz
 identity, so the agent posts as itself and the user stays its owner.
@@ -90,13 +112,17 @@ In a non-interactive shell the helper reads `BUZZ_OWNER_PRIVATE_KEY` instead. In
 that case tell the user to prefix the assignment with a space so most shells keep
 it out of the history.
 
-## 4. Ask for access
+If this command fails with `relay_membership_required`, step 2 is still open: the
+user's own Buzz key is not admitted to this relay. The key pair on disk stays
+valid, so repeat the command with `--force` once the owner has confirmed.
 
-The user sends the printed public key to the Buzz owner and names the projects
-they work on. The owner grants access per repository. Nothing else works until
-that grant exists, by design.
+## 5. Ask for channel access
 
-## 5. Register the projects
+The user sends the agent public key printed in step 4 to the Buzz owner and names
+the projects they work on. The owner adds that key to each project channel.
+Nothing else works until that grant exists, by design.
+
+## 6. Register the projects
 
 Once the grant is in place, run inside each project checkout:
 
@@ -107,7 +133,7 @@ Once the grant is in place, run inside each project checkout:
 The repo id is the one the Buzz owner used in the grant. The helper finds the
 matching channel and stores the mapping.
 
-## 6. Verify
+## 7. Verify
 
 ```bash
 ~/.config/buzz-agent/bin/project-buzz doctor

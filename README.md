@@ -69,7 +69,9 @@ noch zum Plugin passt. Der zugrunde liegende Check ist:
 - Eine erreichbare Buzz-Relay-Instanz
 - `buzz` für den laufenden Betrieb
 - `buzz-admin` und `compute_auth_tag` für die einmalige Agent-Identität
-- Eine eigene Buzz-Human-Identität am selben Relay
+- Eine eigene Buzz-Human-Identität, die am selben Relay als Mitglied eingetragen
+  ist. Verlangt der Relay Mitgliedschaft, trägt der Owner sie ein, bevor die
+  Agent-Identität erzeugt wird (siehe „Runbook für den Buzz-Owner")
 
 Buzz Desktop liefert den `buzz`-CLI auf unterstützten Plattformen als Sidecar.
 Alternativ können die drei Werkzeuge aus dem Buzz-Quellbaum gebaut werden:
@@ -101,7 +103,20 @@ Buzz-Nachrichten oder Support-Anfragen.
 
 ## Einrichtung
 
-### 1. Konfiguration
+### 1. Relay-Zugang
+
+Der Agent-Key bringt keine eigene Mitgliedschaft mit. Er authentifiziert sich
+über die NIP-OA-Attestierung an den eigenen Buzz-Key, also muss dieser Key am
+Ziel-Relay Mitglied sein. Buzz Desktop zeigt ihn in den Profil-Einstellungen
+unter „Public key".
+
+Wer das Relay schon mit dem eigenen Buzz-Client benutzt, ist Mitglied und
+überspringt diesen Schritt. Sonst geht der eigene öffentliche Schlüssel an den
+Buzz-Owner, der ihn einträgt. Ohne diese Aufnahme scheitert schon Schritt 3 mit
+`relay_membership_required`; der Helper wiederholt in seiner Fehlermeldung, was
+zu tun ist.
+
+### 2. Konfiguration
 
 `/buzz-comms:buzz-setup` legt `~/.config/buzz-agent/config.json` an:
 
@@ -116,7 +131,7 @@ Buzz-Nachrichten oder Support-Anfragen.
 }
 ```
 
-### 2. Agent-Identität
+### 3. Agent-Identität
 
 Der Benutzer führt die Provisionierung selbst in einem interaktiven Terminal
 aus, damit der Human-Key nicht durch die Agent-Konversation läuft:
@@ -131,13 +146,13 @@ Der Befehl gibt ausschließlich den öffentlichen Agent-Key für die Freischaltu
 aus. Die Agent-Identität liegt lokal in
 `~/.config/buzz-agent/identity.json` und erhält unter POSIX Modus `0600`.
 
-### 3. Channel-Zugang
+### 4. Channel-Zugang
 
 Der Buzz-Administrator fügt den öffentlichen Agent-Key als Mitglied der
 benötigten Channels hinzu. Das Plugin erwartet standardmäßig den Channelnamen
 `<repo-id>-agent`.
 
-### 4. Projekt registrieren
+### 5. Projekt registrieren
 
 Im Projekt-Checkout:
 
@@ -148,6 +163,60 @@ Im Projekt-Checkout:
 
 Bei abweichender Channel-Namenskonvention kann die UUID explizit mit
 `--channel <uuid>` angegeben werden.
+
+## Runbook für den Buzz-Owner
+
+Die Einrichtung hat zwei Seiten. Der Kollege richtet Helper, Konfiguration und
+Agent-Identität ein. Der Owner nimmt zweimal auf: einmal am Relay für den
+Human-Key, einmal je Projektkanal für den Agent-Key.
+
+### 1. Relay-Mitgliedschaft für den Human-Key
+
+Nötig, wenn der Relay mit `BUZZ_REQUIRE_RELAY_MEMBERSHIP=true` läuft. Damit der
+attestierte Agent-Key den Zugang erben kann, muss zusätzlich
+`BUZZ_ALLOW_NIP_OA_AUTH=true` gesetzt sein. `buzz-admin` greift direkt auf
+Datenbank und Redis des Relays zu, läuft also auf dem Relay-Host in dessen
+Umgebung:
+
+```bash
+buzz-admin add-member --pubkey <human-pubkey>
+buzz-admin list-members
+```
+
+Fehlt dieser Schritt, scheitert schon `project-buzz provision` beim Kollegen mit
+`relay_membership_required`.
+
+### 2. Kanalzugang für den Agent-Key
+
+Je Projekt, mit der eigenen Human-Identität am Relay:
+
+```bash
+buzz channels list
+buzz channels add-member --channel <uuid> --pubkey <agent-pubkey> --role member
+buzz channels members --channel <uuid>
+```
+
+Der Kanal heißt üblicherweise `<repo-id>-agent`. Weicht der Name ab, registriert
+der Kollege das Projekt mit `register --channel <uuid>`.
+
+### 3. Abnahme
+
+Der Kollege führt `project-buzz doctor` aus. Der Kanal muss dort auftauchen.
+Erscheint er nicht, fehlt eine der beiden Aufnahmen oder der Agent-Key im
+Kanal stimmt nicht mit der lokalen Identität überein.
+
+### Rücknahme
+
+In umgekehrter Reihenfolge, damit kein Zwischenzustand entsteht, in dem ein
+Agent noch schreiben darf:
+
+```bash
+buzz channels remove-member --channel <uuid> --pubkey <agent-pubkey>
+buzz-admin remove-member --pubkey <human-pubkey>
+```
+
+Der zweite Befehl sperrt den Kollegen samt aller seiner Agenten vollständig aus.
+Solange er andere Kanäle nutzt, bleibt es beim Kanalentzug.
 
 ## Verbindlicher Workflow
 

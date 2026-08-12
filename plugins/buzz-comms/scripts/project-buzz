@@ -38,9 +38,25 @@ REPO_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,62}$")
 PUBKEY_RE = re.compile(r"^[0-9a-f]{64}$")
 
 MAX_CONTENT = 4000
-HELPER_VERSION = "0.4.1"
+HELPER_VERSION = "0.4.2"
 FORBIDDEN_IN_CONTENT = ("[PILOT-", "[AGENT-")
 LIFECYCLE_PHASES = ("start", "progress", "blocked", "result")
+
+# A relay that requires membership answers 403 with this error code, and the
+# buzz CLI passes it through. The agent key carries no membership of its own:
+# it authenticates through the NIP-OA attestation to its owner's key, so the
+# missing piece is almost always the owner's own membership. Without this hint
+# the operator sees a bare 403 and has nothing to act on.
+RELAY_MEMBERSHIP_ERROR = "relay_membership_required"
+RELAY_MEMBERSHIP_HINT = (
+    "The relay only admits members. This agent key has no membership of its "
+    "own: it inherits access from the Buzz key that signed its NIP-OA "
+    "attestation, so that key is most likely not a member of this relay yet. "
+    "Send your own Buzz public key to the relay owner and ask to be added. "
+    "The owner runs `buzz-admin add-member --pubkey <your-public-key>` on the "
+    "relay host, then repeat this command. If your key was a member before, "
+    "it may have been removed or the stored auth tag no longer matches it."
+)
 
 
 class UserError(Exception):
@@ -241,11 +257,13 @@ def run_buzz(
     )
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout or "").strip()
-        raise UserError(
-            "buzz {0} failed (exit {1}): {2}".format(
-                " ".join(args[:2]), completed.returncode, detail
-            )
+        message = "buzz {0} failed (exit {1}): {2}".format(
+            " ".join(args[:2]), completed.returncode, detail
         )
+        if RELAY_MEMBERSHIP_ERROR in detail:
+            # One line, because doctor renders this inside a JSON report.
+            message = "{0} {1}".format(message, RELAY_MEMBERSHIP_HINT)
+        raise UserError(message)
     return completed.stdout
 
 
