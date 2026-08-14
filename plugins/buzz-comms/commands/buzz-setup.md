@@ -34,9 +34,9 @@ path in every following step and tell the user to use it too.
 Verify `python3 --version` (3.8 or newer) and that these binaries are reachable,
 either on `PATH` or as absolute paths the user can supply:
 
-- `buzz` — required for all reporting
-- `buzz-admin` — required only for creating the agent identity
-- `compute_auth_tag` — required only for creating the agent identity
+- `buzz` - required for all reporting
+- `buzz-admin` - required only for creating the agent identity
+- `compute_auth_tag` - required only for creating the agent identity
 
 Use binaries supplied by the user's Buzz deployment or build the tools from the
 Buzz source tree. This plugin does not distribute Buzz binaries. Never invent a

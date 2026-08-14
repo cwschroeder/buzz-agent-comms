@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""project-buzz — portable Buzz project lifecycle publisher for coding agents.
+"""project-buzz - portable Buzz project lifecycle publisher for coding agents.
 
 This is the distributable counterpart to the pilot helper that runs on the Buzz
 owner's host. It carries the same protocol: the same marker format, the same
@@ -38,9 +38,21 @@ REPO_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,62}$")
 PUBKEY_RE = re.compile(r"^[0-9a-f]{64}$")
 
 MAX_CONTENT = 4000
-HELPER_VERSION = "0.4.2"
+HELPER_VERSION = "0.5.1"
 FORBIDDEN_IN_CONTENT = ("[PILOT-", "[AGENT-")
 LIFECYCLE_PHASES = ("start", "progress", "blocked", "result")
+GERMAN_ASCII_SUBSTITUTION_RE = re.compile(
+    r"(?<!\w)(?:"
+    r"\w*(?:aender|pruef|oeffent|fuehr|laeu|loes|wuerd)\w*|"
+    r"(?:da|hier|wo)?fuer|fuenf\w*|naechst\w*|buendel\w*|"
+    r"(?:dar|gegen|hin|her|vor)?ueber\w*|zurueck\w*|moeglich\w*|"
+    r"frueh\w*|spaet\w*|waehrend\w*|koenn\w*|muess\w*|"
+    r"duerf\w*|zuverlaess\w*|groess\w*|abschliess\w*|"
+    r"plaen\w*|faell\w*|waehl\w*|waer\w*|laes\w*|klaer\w*|"
+    r"haeufig\w*|taeg\w*|saemt\w*|\w*itaet\w*"
+    r")(?!\w)",
+    re.IGNORECASE,
+)
 
 # A relay that requires membership answers 403 with this error code, and the
 # buzz CLI passes it through. The agent key carries no membership of its own:
@@ -381,6 +393,18 @@ def validate_content(content: str) -> str:
                 "Buzz project update must not contain {0!r}: it would inject a "
                 "protocol marker".format(forbidden)
             )
+    visible = strip_german_lint_exemptions(content)
+    substitutions = sorted(
+        {match.group(0) for match in GERMAN_ASCII_SUBSTITUTION_RE.finditer(visible)},
+        key=str.casefold,
+    )
+    if substitutions:
+        raise UserError(
+            "German Buzz prose must use real umlauts and ß. Replace these ASCII "
+            "substitutions before publishing: {0}. Put technical identifiers in "
+            "inline code or fenced code, and quoted source text in a Markdown "
+            "block quote.".format(", ".join(substitutions))
+        )
     return content
 
 
@@ -395,6 +419,52 @@ def strip_code_regions(content: str) -> str:
         if not fenced:
             visible.append(re.sub(r"`[^`]*`", " ", line))
     return "\n".join(visible)
+
+
+def strip_inline_code_spans(line: str) -> str:
+    """Remove Markdown inline code spans with matching backtick delimiters."""
+    cursor = 0
+    visible = []
+    while True:
+        opening = re.search(r"`+", line[cursor:])
+        if opening is None:
+            visible.append(line[cursor:])
+            break
+        opening_start = cursor + opening.start()
+        opening_end = cursor + opening.end()
+        delimiter = line[opening_start:opening_end]
+        closing = re.search(
+            r"(?<!`)" + re.escape(delimiter) + r"(?!`)", line[opening_end:]
+        )
+        if closing is None:
+            visible.append(line[cursor:])
+            break
+        closing_end = opening_end + closing.end()
+        visible.append(line[cursor:opening_start])
+        visible.append(" ")
+        cursor = closing_end
+    return "".join(visible)
+
+
+def strip_german_lint_exemptions(content: str) -> str:
+    """Remove technical and quoted regions before checking German prose."""
+    visible = []
+    fence = None  # type: Optional[Tuple[str, int]]
+    for line in content.splitlines():
+        stripped = line.lstrip()
+        fence_match = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+        if fence_match:
+            marker = fence_match.group(1)
+            if fence is None:
+                fence = (marker[0], len(marker))
+            elif marker[0] == fence[0] and len(marker) >= fence[1]:
+                fence = None
+            continue
+        if fence is not None or stripped.startswith(">"):
+            continue
+        visible.append(strip_inline_code_spans(line))
+    prose = "\n".join(visible)
+    return re.sub(r"\b(?:[A-Za-z][A-Za-z0-9+.-]*://|mailto:)\S+", " ", prose)
 
 
 def channel_identity_names(

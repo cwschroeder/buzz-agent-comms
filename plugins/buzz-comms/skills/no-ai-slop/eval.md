@@ -1,6 +1,6 @@
 # No AI slop eval
 
-Use this after the rewrite. Answer each check with pass or fail. If any check fails, fix the draft before returning it.
+Use this after generating or rewriting prose. Answer each check with pass or fail. If any check fails, fix the text before returning it.
 
 For detect requests, make sure the response names each pattern found with a quoted line and a short fix, without rewriting the draft.
 
@@ -17,6 +17,13 @@ For detect requests, make sure the response names each pattern found with a quot
 9. Does the edit keep useful edge and preserve structure unless the structure was hurting the piece?
 10. Are genuinely tangled sentences fixed while clear spoken cadence, fragments, and changes in pace remain intact?
 
+## Voice and format
+
+1. For Buzz lifecycle text, was `voice-profile.md` read and applied without quoting the profile?
+2. Does the text lead with verified scope or status and make the next action or blocker easy to find?
+3. Does the text match a compact project update instead of imposing article or marketing structure?
+4. In generation mode, did the writer avoid inventing facts, commitments, dates, measurements, URLs, or runtime state?
+
 ## Words to cut
 
 1. Are banned words, filler phrases, often-empty adverbs, and inflated claims removed unless quoted as examples?
@@ -32,11 +39,21 @@ For detect requests, make sure the response names each pattern found with a quot
 7. Are colons sentence case unless grammar, a proper noun, a title, or code requires otherwise?
 8. Are em dashes used sparingly: Usually none in short copy, and only 1-2 in longer drafts when they clearly help?
 
+## German Buzz prose
+
+1. Does German prose use real `ä`, `ö`, `ü`, `Ä`, `Ö`, `Ü`, and `ß`, with no
+   `fuer`, `fuenf`, `Naechster`, `Buendel`, `aendern`, or `pruefen` outside
+   technical identifiers, paths, commands, or quoted source text?
+2. Are translated AI openings, recap phrases, binary contrasts, and inflated
+   project language removed?
+3. Does a lifecycle update read like a compact colleague update instead of a
+   generated mini-report?
+
 ## Final read
 
 1. Was the edit checked directly against this file without requiring separate editor and evaluator agents?
 2. Does the draft avoid robotic symmetry, repeated sentence shapes, and stacked punchy fragments?
 3. Would the writer recognize the edited draft as their own voice?
 4. Would the edited draft sound natural if read to a sharp colleague?
-5. Does the final output include the full edited draft and a short **What changed** section?
+5. Does the final output contain the complete reader-ready text, with **What changed** only when an edit or explanation was requested?
 6. For detect requests, does the response name each pattern with a quoted line and a short fix, without rewriting, scoring, or claiming AI authorship?

@@ -254,6 +254,53 @@ class ContentValidation(HelperTestCase):
         self.assertEqual(0, self.run_cli(["start", "u-tech", content]))
         self.assertIn(content, self.sent_content())
 
+    def test_german_ascii_substitutions_are_rejected(self):
+        samples = (
+            "Plan fuer den nächsten Schritt.",
+            "Es folgen fuenf Punkte.",
+            "Naechster Schritt ist die Umsetzung.",
+            "Buendel A beginnt morgen.",
+            "Der Plan wurde geaendert.",
+            "Der Commit ist geprueft.",
+            "Die Dokumentation ist veroeffentlicht.",
+            "Der Test wurde ausgefuehrt.",
+            "Der Dienst laeuft.",
+            "Die Loesung ist dokumentiert.",
+            "Das wuerde den Fehler beheben.",
+            "pruefen/freigeben ist kein Pfad.",
+        )
+        for index, content in enumerate(samples):
+            with self.subTest(content=content):
+                self.assertEqual(
+                    1,
+                    self.run_cli(["start", "u-umlaut-{0}".format(index), content]),
+                )
+        self.assertEqual(
+            [],
+            [call for call in self.calls() if call[:2] == ["messages", "send"]],
+        )
+
+    def test_real_german_umlauts_are_accepted(self):
+        content = "Plan für die nächste Welle mit fünf Punkten. Danach Bündel A."
+        self.assertEqual(0, self.run_cli(["start", "u-real-umlauts", content]))
+        self.assertIn(content, self.sent_content())
+
+    def test_code_paths_urls_and_quotes_are_exempt_from_german_lint(self):
+        content = (
+            "Geändert: `docs/fuer-agenten.md`.\n"
+            "Doppelt: ``fuer-agenten.md``.\n"
+            "Windows: `C:\\temp\\fuer-agenten.md`.\n"
+            "Datei: `fuer-agenten.md`.\n"
+            "Quelle: https://example.test/fuer-agenten und "
+            "buzz://message?name=fuer.\n"
+            "Kontakt: mailto:fuer@example.test.\n"
+            "~~~text\nfuer bleibt im Codeblock\n~~~\n"
+            "````text\n```example\nfuer bleibt im längeren Codeblock\n```\n````\n"
+            "> Im Original steht fuer statt für."
+        )
+        self.assertEqual(0, self.run_cli(["start", "u-umlaut-exempt", content]))
+        self.assertIn(content, self.sent_content())
+
     def test_identity_mention_is_case_insensitive(self):
         self.assertEqual(
             1,
@@ -584,6 +631,27 @@ class RelayMembershipDiagnostics(HelperTestCase):
 
 
 class PolicyContract(unittest.TestCase):
+    def test_no_ai_slop_uses_a_public_buzz_voice_profile(self):
+        skill_root = SCRIPTS.parent / "skills" / "no-ai-slop"
+        skill = (skill_root / "SKILL.md").read_text(encoding="utf-8")
+        profile = (skill_root / "voice-profile.md").read_text(encoding="utf-8")
+
+        self.assertIn("## Three jobs", skill)
+        self.assertIn("voice-profile.md", skill)
+        for phrase in (
+            "verified facts",
+            "No private",
+            "real German umlauts",
+            "next action",
+        ):
+            self.assertIn(phrase, profile)
+        for private_signal in (
+            "Christian Schröder",
+            "Hallo Frau",
+            "Viele Grüße",
+        ):
+            self.assertNotIn(private_signal, profile)
+
     def test_skill_requires_reader_ready_german_and_final_screenshot_evidence(self):
         skill = (
             SCRIPTS.parent / "skills" / "buzz-team-communication" / "SKILL.md"
@@ -596,6 +664,28 @@ class PolicyContract(unittest.TestCase):
             "before the final user response",
         ):
             self.assertIn(phrase, skill)
+
+    def test_buzz_publication_explicitly_loads_german_no_ai_slop_checks(self):
+        skill_root = SCRIPTS.parent / "skills"
+        communication = (skill_root / "buzz-team-communication" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        no_ai_slop = (skill_root / "no-ai-slop" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        evaluation = (skill_root / "no-ai-slop" / "eval.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("Before every `start`, `progress`, `blocked`, or `result`", communication)
+        self.assertIn("even when Claude did not auto-activate", communication)
+        self.assertIn("Use before every Buzz lifecycle publication", no_ai_slop)
+        for phrase in ("fuer", "Naechster", "Buendel"):
+            self.assertIn(phrase, communication)
+            self.assertIn(phrase, no_ai_slop)
+            self.assertIn(phrase, evaluation)
+        self.assertIn("German Buzz prose", no_ai_slop)
+        self.assertIn("German Buzz prose", evaluation)
 
     def test_plugin_commands_are_documented_with_namespace(self):
         repository = SCRIPTS.parents[2]

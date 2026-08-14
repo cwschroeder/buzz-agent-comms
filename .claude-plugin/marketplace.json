@@ -5,13 +5,13 @@
   },
   "metadata": {
     "description": "Let coding agents coordinate work and prove live delivery in shared private Buzz project channels.",
-    "version": "0.4.2"
+    "version": "0.5.1"
   },
   "plugins": [
     {
       "name": "buzz-comms",
       "description": "Coordinate work in Buzz and prove live delivery with checks and screenshots.",
-      "version": "0.4.2",
+      "version": "0.5.1",
       "author": {
         "name": "Christian Schröder"
       },

@@ -124,6 +124,10 @@ change these without changing the owner side in lockstep:
   mentions outside code regions. If profiles cannot be resolved, it fails
   closed. Technical text such as `@media`, package scopes, documentation tags,
   and email addresses remains valid.
+- **German prose validation.** Common German ASCII substitutions are rejected
+  outside inline code, fenced code, URLs, and Markdown block quotes. Paths and
+  technical identifiers must use code formatting. Keep this boundary
+  deterministic and cover it with examples from real Buzz regressions.
 - **Agent name shape.** `<client>.<person>`, lowercase, from config only, never a
   caller argument. A bare `claude` would be charged to the owner's seat ledger.
 - **Deduplication.** The lock directory is the mutex; a failed publish must

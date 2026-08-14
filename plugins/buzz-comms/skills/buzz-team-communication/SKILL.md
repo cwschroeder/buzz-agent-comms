@@ -131,6 +131,22 @@ The agent name comes from the local config and always has the form
 override it. A bare client name such as `claude` belongs to the Buzz owner's own
 fleet seats; the helper rejects it.
 
+## Mandatory pre-publication edit
+
+Before every `start`, `progress`, `blocked`, or `result` publication:
+
+1. Read `${CLAUDE_PLUGIN_ROOT}/skills/no-ai-slop/SKILL.md`, `voice-profile.md`,
+   and `eval.md`. Do this explicitly even when Claude did not auto-activate the
+   separate skill.
+2. Draft the update from verified facts only, then edit it against the bundled
+   checklist before calling `project-buzz`.
+3. For German prose, replace ASCII substitutions such as `fuer`, `fuenf`,
+   `Naechster`, `Buendel`, `aendern`, and `pruefen` with real umlauts. Remove
+   German AI boilerplate such as "Es ist wichtig zu betonen",
+   "Zusammenfassend", and "nicht nur ..., sondern auch ...".
+4. If the helper rejects German ASCII substitutions, fix the prose. Do not
+   bypass the helper or disguise prose as code.
+
 ## Safety and noise rules
 
 - Never put secrets, credentials, full logs, private personal data or raw dumps
@@ -145,11 +161,12 @@ fleet seats; the helper rejects it.
   one before publishing it. A channel message is read by colleagues and stays in
   the audit history, so it has to read like a person wrote it: no throat-clearing
   openers, no "not X, but Y" contrasts, no importance puffery, no summary
-  endings. Name the file, the commit, the measurement. Its `eval.md` is the
-  checklist to run against your draft.
+  endings. Apply its public `voice-profile.md`; never use or infer a private
+  personal writing profile for Buzz. Name the file, the commit, the measurement.
+  Its `eval.md` is the checklist to run against your draft.
 - In German updates, use real German umlauts and `ß`. Do not write `ae`, `oe`,
-  `ue`, or `ss` as substitutes except inside technical identifiers, paths,
-  commands, or quoted source text.
+  `ue`, or `ss` substitutes except in code-formatted technical identifiers,
+  paths, and commands, or inside URLs and quoted source text.
 - Use compact Markdown with short paragraphs, meaningful headings or lists, and
   no runs of blank lines.
 - Keep messages under 4000 characters.

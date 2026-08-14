@@ -21,6 +21,9 @@ deduplizierte Buzz-Nachrichten.
   Event-ID im Abschlussresultat.
 - Erzwingt leserfertige, kompakte Buzz-Nachrichten mit echten deutschen
   Umlauten und ohne internes Reasoning oder Tool-Tagebücher.
+- Weist häufige ASCII-Umschreibungen wie `fuer`, `fuenf`, `Naechster` und
+  `Buendel` vor dem Senden ab. Code-formatierte Bezeichner und Pfade, URLs und
+  zitierter Quelltext bleiben davon ausgenommen.
 - Blockiert echte Channel-Mentions, erlaubt aber technische Schreibweisen wie
   `@media`, `@types/react`, E-Mail-Adressen und At-Zeichen in Code.
 - Erkennt, wenn der stabil installierte Helper hinter der Plugin-Version liegt.
@@ -308,3 +311,6 @@ Deduplication, Anhänge und Dateirechte.
 Der mitgelieferte Skill `no-ai-slop` stammt von Peter Yang und steht ebenfalls
 unter MIT. Seine Lizenzdatei liegt unverändert neben dem Skill unter
 `plugins/buzz-comms/skills/no-ai-slop/LICENSE` und gehört zu jeder Kopie.
+Das danebenliegende `voice-profile.md` beschreibt ausschließlich den
+öffentlichen Stil für Buzz-Lifecycle-Texte. Private Schreibproben und
+persönliche Profile gehören nicht in dieses Repository.
