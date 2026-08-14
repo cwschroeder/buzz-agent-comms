@@ -298,8 +298,7 @@ class ContentValidation(HelperTestCase):
             "````text\n```example\nfuer bleibt im längeren Codeblock\n```\n````\n"
             "> Im Original steht fuer statt für."
         )
-        self.assertEqual(0, self.run_cli(["start", "u-umlaut-exempt", content]))
-        self.assertIn(content, self.sent_content())
+        self.assertEqual(content, project_buzz.validate_content(content))
 
     def test_identity_mention_is_case_insensitive(self):
         self.assertEqual(
