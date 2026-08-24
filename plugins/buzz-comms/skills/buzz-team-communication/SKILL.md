@@ -9,6 +9,11 @@ Buzz is the durable communication layer for the team's coding agents. Every
 registered project has one private channel that humans and agents share. Read it
 before you change anything, and publish your own work lifecycle into it.
 
+Before any project operation, read and follow the sibling
+`${CLAUDE_PLUGIN_ROOT}/skills/engineering-contract/SKILL.md`. It owns the shared
+worktree, merge-request, maintainer, deployment, infrastructure, UI-design, and
+customer-data rules. This skill owns Buzz coordination and delivery evidence.
+
 Use the deterministic helper. `/buzz-comms:buzz-setup` installs it at a stable
 path, so always call it there:
 
@@ -48,26 +53,31 @@ that source drift could not be checked.
 
 ## Mandatory workflow
 
-1. Run `project-buzz resolve` from the project workspace. Fail closed if the
+1. Establish the contributor or maintainer role with the
+   `engineering-contract` skill. Do not infer maintainer authority from
+   credentials or repository permissions.
+2. Run `project-buzz resolve` from the project workspace. Fail closed if the
    project is not registered; never guess a neighbouring channel. If it is not
    registered and the work is in scope, run `project-buzz register <repo-id>`.
-2. Run `project-buzz context <repo-id> 20` before planning, mutating, building,
+3. Run `project-buzz context <repo-id> 20` before planning, mutating, building,
    deploying, or diagnosing. Actively apply the recent messages: identify
    parallel work, active worktrees/feature branches, current runtime state,
    corrections, review gates, and unresolved blockers. Someone else's agent
-   may already own part of this work.
-3. For a user-visible change, determine the canonical runtime URL and the exact
+   may already own part of this work. `project-buzz open <repo-id>` lists the
+   threads that started but never reached a closing result, so open work is
+   answerable without scrolling.
+4. For a user-visible change, determine the canonical runtime URL and the exact
    commit/build that must be visible there. Inspect the active feature worktree;
    do not assume the default checkout is the delivery source. If no canonical
    runtime exists, record that explicitly before work begins.
-4. Before the first project mutation or long-running operation, publish one root:
+5. Before the first project mutation or long-running operation, publish one root:
 
    ```bash
    project-buzz start <update-id> "<concise intent>" [repo-id]
    ```
 
    Save the returned `event_id` as the thread root.
-5. For a meaningful milestone or a changed plan, publish a threaded update with a
+6. For a meaningful milestone or a changed plan, publish a threaded update with a
    new unique update ID:
 
    ```bash
@@ -75,7 +85,7 @@ that source drift could not be checked.
    ```
 
    Do not post tool-by-tool narration.
-6. After proportional verification and before the final user response, publish
+7. After proportional verification and before the final user response, publish
    exactly one threaded result:
 
    ```bash
@@ -91,8 +101,39 @@ Use a stable, unique ID such as `claude-20260807-auth-refactor-start`. A retry
 with the same phase and ID is deduplicated and returns the stored result, so a
 failed publish can be retried verbatim.
 
+### Corrections are top-level posts, never thread replies
+
+Buzz renders thread replies only inside the collapsible thread panel; the
+channel timeline shows only thread roots. A published result that turns out
+wrong must therefore be corrected visibly, not silently inside a thread.
+Publish a correction as a new top-level post that references the superseded
+event:
+
+```bash
+project-buzz correct <new-update-id> "<what was wrong and what now holds>" \
+  --supersedes <event-id-of-the-published-result> [repo-id]
+```
+
+The helper appends `Korrigiertes Event: <id>` and returns the superseded ID in
+its payload. Correction is a closing phase like `result` and `blocked`: an
+update that was corrected is closed, not open. Use one correction for the
+original update; do not chain further results after it.
+
+Open work is read with the deterministic `open` view instead of from memory:
+
+```bash
+project-buzz open [repo-id] [limit]     # default limit 100, max 200
+```
+
+It groups messages into threads by their root event (the reply `e`-tag) and
+returns every update thread that opened with a `start` yet reached neither
+`result`, `blocked`, nor `correction`, newest activity first.
+
 ## Delivery proof for user-visible changes
 
+- Only an explicitly designated maintainer may merge, deploy, or change shared
+  infrastructure. A contributor publishes a review-ready result with the merge
+  request and leads with `Nicht live` while maintainer action remains open.
 - Do not publish `result` or make an equivalent completion claim until the
   concrete commit/build runs on the canonical runtime and an external browser
   check has verified the requested behavior. A local dev server, green build,
@@ -124,6 +165,63 @@ Attachments are deliberately top-level; never move them into the collapsible
 lifecycle thread. Publish screenshot evidence after runtime verification and
 immediately before the lifecycle result, then send the final user response.
 
+## Visuals in the channel
+
+The channel is text-only: a fenced code block renders as plain text, so a
+compactly drawn ASCII structure or a Mermaid block survives in any client.
+Use the `show-me` skill that ships next to this one for the visual itself;
+these rules apply to every lifecycle publication:
+
+- Add at most one visual per message, narrowed to under 80 columns, placed
+  next to the one or two sentences it supports.
+- Use real project, agent, and file names. No placeholder labels in a post.
+- ASCII block diagrams and Mermaid go inside fenced code blocks only.
+- HTML is for a local preview or a PNG attachment, never a bare `file://`
+  link inside a post.
+- The visual does not replace the prose: results still name the file, the
+  commit, and the measurement.
+
+## Project documentation guardrails
+
+Every agent-served project keeps its source-of-truth files current.
+`PRODUCT.md` and `DESIGN.md` sit at the project ROOT (impeccable's
+convention); the rest lives under `docs/`: the set is:
+
+| File | Content | Owning skill |
+|---|---|---|
+| `PRODUCT.md` (root) | Product/business contract: audience, goals, non-goals, scope; at the project root per impeccable | `impeccable` |
+| `DESIGN.md` (root) | Shipped design system: tokens and named rules from the artifact; at the project root per impeccable | `impeccable` |
+| `docs/ARCHITECTURE.md` | Software architecture in C4 + arc42 shape | `c4-model-skill`, `arc42-documentation` |
+| `docs/DEPLOYMENT.md` | Concrete runbook: how builds ship, canonical runtime, exact commit/build, rollback, who deploys | whoever deploys |
+| `docs/LEARNINGS.md` | Durable cross-agent memory of the project | every agent |
+| `tasks/tasks.md` | Task backlog + working status; complex tasks link a subfolder `tasks/<aufgabe>/` | every agent |
+
+- **Only `/docs`, never `/doc`.** The folder is deliberately the plural
+  `docs/`. An agent that ever spots a `/doc` directory in a project renames
+  it to `/docs` and merges content. There is no `doc/` variant anywhere in
+  the set.
+
+- `ARCHITECTURE.md` is built with `c4-model-skill` (Simon Brown's C4 model:
+  Context and Container levels cover most teams; go deeper only on request)
+  and `arc42-documentation` (Melodic-arc42, the 12-section arc42 template).
+- `DESIGN.md` and `PRODUCT.md` (project root) follow `impeccable`: PRODUCT.md is the product
+  contract, DESIGN.md records the system that actually shipped, written from
+  the artifact, never from intentions.
+- `DEPLOYMENT.md` is the operational runbook and stays current on every real
+  deploy, matching the canonical runtime and the exact commit or build.
+- `docs/LEARNINGS.md` is always updated. After any significant work session,
+  append durable insights: verified facts, decisions, gotchas, corrections,
+  regressions. One dated entry per insight, named agent. Append-only:
+  corrections are appended, never delete or rewrite history.
+- `tasks/tasks.md` is the working tracker: one row per open or current task,
+  status open, in progress, blocked, done, cancelled; complex tasks get a
+  subfolder `tasks/<aufgabe>/` and the row links it.
+- The meaning of every file in the set is anchored in the project's
+  `AGENTS.md` (or `CLAUDE.md`) under a `Project layout - documentation and
+  tasks` block. Before creating or following any of these files, read that
+  block; it states who owns each file. Never let the guardrail set drift
+  from that block.
+
 ## Who you are in the channel
 
 The agent name comes from the local config and always has the form
@@ -146,11 +244,27 @@ Before every `start`, `progress`, `blocked`, or `result` publication:
    "Zusammenfassend", and "nicht nur ..., sondern auch ...".
 4. If the helper rejects German ASCII substitutions, fix the prose. Do not
    bypass the helper or disguise prose as code.
+5. Decide whether the update is clearer as a picture: the change shape
+   (diff), the plan (steps or call tree), the interaction (Mermaid), or the
+   open-work shape. If yes, draft one compact visual with the `show-me` skill
+   that ships next to this one and embed it as a fenced code block. One visual
+   per message, under 80 columns, next to the sentence it supports.
+6. Run a plain-language pass with the `bro` skill that ships next to this one:
+   the audience is a person who may not know the project's internals (for
+   example a product manager). Expand acronyms at first mention, explain
+   technical shorthand, and drop jargon the team itself would not use in
+   speech. A result only a specialist understands is not a delivered result.
+   The `/bro` command re-explains the previous answer with the same quality
+   bar: facts verbatim, same language, simpler.
 
 ## Safety and noise rules
 
 - Never put secrets, credentials, full logs, private personal data or raw dumps
-  into Buzz.
+  into Buzz. The helper rejects common secret shapes deterministically before
+  publishing: `nsec1...`, `sk-...`, `ghp_...`/`github_pat_...`, `xox...`,
+  `AKIA...`, `Bearer <token>`, and `key: <value>` assignments long enough to be
+  a credential. Mask or redact first; do not disguise a secret as code to
+  bypass the guard.
 - Never mention a channel identity or include protocol markers in lifecycle
   content. The helper resolves channel identities and rejects real mentions
   while allowing technical text such as `@media`, `@types/react`, email

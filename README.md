@@ -1,18 +1,31 @@
 # buzz-agent-comms
 
-Ein Claude-Code-Plugin, mit dem Coding-Agents ihren Arbeitsstand in privaten
-[Buzz](https://github.com/block/buzz)-Projektchannels koordinieren und belegen.
+Ein Claude-Code-Plugin für gemeinsame Entwicklungsregeln und die Koordination
+von Coding-Agents in privaten
+[Buzz](https://github.com/block/buzz)-Projektchannels.
 Ein Projekt, ein Channel und eine gemeinsame Historie bleiben damit über
 mehrere Entwicklerrechner und Agent-Instanzen hinweg erhalten.
 
 Das Plugin veröffentlicht keine Projektdaten von selbst. Es gibt dem Agenten
-einen verbindlichen Workflow und einen kleinen lokalen Helper für signierte,
-deduplizierte Buzz-Nachrichten.
+einen verbindlichen Entwicklungs- und Kommunikationsworkflow und einen kleinen
+lokalen Helper für signierte, deduplizierte Buzz-Nachrichten.
 
 ## Funktionen
 
 - Liest vor Projektarbeit die letzten Channel-Nachrichten und berücksichtigt
   parallele Arbeit, aktive Worktrees, Review-Gates und offene Blocker.
+- Verlangt für jede Implementierung einen eigenen Git-Worktree und eine
+  aufgabenspezifische Branch. Beitragende pushen ihre Branch und erstellen einen
+  Merge Request.
+- Reserviert Merge, Deployment und die Verwaltung der zugehörigen Infrastruktur
+  für den ausdrücklich benannten Maintainer. Beitragende enden bei
+  `Review-ready`.
+- Verpflichtet Claude bei jeder UI- und UX-Arbeit, den installierten
+  `impeccable`-Skill vollständig zu laden und dessen Workflow anzuwenden. Fehlt
+  der Skill, darf der Agent die Oberfläche nicht verändern.
+- Bevorzugt bei Zugriff auf Kundendaten einen verifiziert lokalen KI-Pfad und
+  verbietet einen stillen Cloud-Fallback. Kundendaten müssen vor jeder
+  Veröffentlichung entfernt oder sicher anonymisiert werden.
 - Veröffentlicht Start, relevante Fortschritte und genau ein belegtes Ergebnis.
 - Trennt reviewbereite Arbeit klar von tatsächlich ausgeliefertem Code.
 - Verlangt bei nutzersichtbaren Änderungen den Nachweis auf der kanonischen
@@ -21,24 +34,78 @@ deduplizierte Buzz-Nachrichten.
   Event-ID im Abschlussresultat.
 - Erzwingt leserfertige, kompakte Buzz-Nachrichten mit echten deutschen
   Umlauten und ohne internes Reasoning oder Tool-Tagebücher.
+- Ergänzt Lebenszyklus-Meldungen bei Bedarf um genau ein kompaktes Diagramm
+  (ASCII-Struktur oder Mermaid im Code-Block, Diff, Call-Tree) aus dem
+  mitgelieferten `show-me`-Skill, damit Pläne, Änderungen und offene Threads
+  im Textkanal auch als Bild lesbar sind.
+- Bündelt den `/bro`-Skill (vendiert, MIT von
+  `luchasarie/bro-skill`): Wenn eine letzte Antwort zu technisch war, erklärt
+  `/bro` sie in klarer Sprache neu, gleiche Sprache, alle Fakten wortwörtlich.
+- Legt Projekt-Doku-Guardrails fest: `PRODUCT.md` und `DESIGN.md` im
+  Projekt-Hauptordner (via `impeccable`), `docs/ARCHITECTURE.md` (via
+  `c4-model-skill` and `arc42-documentation`), `docs/DEPLOYMENT.md` und
+  `docs/LEARNINGS.md`.
+- Verpflichtet eine Plain-Language-Prüfung vor jeder Veröffentlichung, damit
+  auch Produktmanager und weniger technische Leser die Ergebnisse verstehen.
+- Führt einen Aufgaben-Tracker ein (`tasks/tasks.md`): eine Zeile pro Aufgabe
+  mit Bearbeitungsstatus; komplexe Aufgaben verweisen auf einen Unterordner
+  `tasks/<aufgabe>/`. Die Bedeutung aller Doku- und Task-Dateien ist je
+  Projekt in `AGENTS.md`/`CLAUDE.md` unter dem Block `Project layout -
+  documentation and tasks` verankert.
 - Weist häufige ASCII-Umschreibungen wie `fuer`, `fuenf`, `Naechster` und
   `Buendel` vor dem Senden ab. Code-formatierte Bezeichner und Pfade, URLs und
   zitierter Quelltext bleiben davon ausgenommen.
 - Blockiert echte Channel-Mentions, erlaubt aber technische Schreibweisen wie
   `@media`, `@types/react`, E-Mail-Adressen und At-Zeichen in Code.
+- Verwendet die deterministische `open`-Sicht: offene Threads (gestartet, aber
+  ohne Ergebnis, Blocker oder Korrektur) pro Kanal abrufbar statt aus dem
+  Kanal-Lesen geschätzt.
+- Publishiert Korrekturen als sichtbaren Top-Level-Post mit Referenz auf das
+  korrigierte Event, nicht als eingeklappte Thread-Antwort.
+- Sperrt häufige Geheimnisformen vor dem Senden aus (`nsec1...`, `sk-...`,
+  `ghp_...`/`github_pat_...`, `xox...`, `AKIA...`, `Bearer <Token>` und
+  `key: <Wert>`-Zuweisungen ab Zeichenlänge 16).
 - Erkennt, wenn der stabil installierte Helper hinter der Plugin-Version liegt.
 
 ## Inhalt
 
 | Komponente | Aufgabe |
 |---|---|
+| `engineering-contract` | Worktrees, Merge Requests, Maintainer-Rollen, Impeccable und lokale KI bei Kundendaten |
 | `buzz-team-communication` | Verbindlicher Kommunikations- und Delivery-Proof-Workflow |
 | `no-ai-slop` | Redigiert jeden Lifecycle-Text, bevor er im Kanal landet |
+| `show-me` | Liefert kompakte Diagramme (ASCII, Mermaid, Diff, HTML) für Pläne, Änderungen und offene Threads |
+| `bro` | Erklärt die letzte Antwort in klarer Sprache neu (MIT, vendiert aus `luchasarie/bro-skill`) |
+| Guardrails | Plain-Language-Pflicht (/bro), Projekt-Doku-Satz (PRODUCT/DESIGN/ARCHITECTURE/DEPLOYMENT/LEARNINGS) und Aufgaben-Tracker (tasks/tasks.md), Datei-Bedeutung verankert in AGENTS.md/CLAUDE.md |
 | `scripts/project-buzz` | Portabler Python-Helper für Identität, Routing, Lifecycle und Anhänge |
 | `/buzz-comms:buzz-setup` | Geführte Einrichtung |
 | `/buzz-comms:buzz-status` | Read-only Diagnose, Versions- und Channel-Check |
 
 Der Helper benötigt nur Python 3.8 oder neuer und die Python-Standardbibliothek.
+
+## Entwicklungsvertrag
+
+Das Plugin behandelt jeden Agenten zunächst als Beitragenden. Nur eine
+ausdrückliche Benennung in den Projektregeln oder im aktuellen Auftrag verleiht
+die Maintainer-Rolle. Technische Berechtigungen allein reichen dafür nicht.
+
+Beitragende arbeiten in einem eigenen Worktree, committen und pushen ihre
+Task-Branch und erstellen oder aktualisieren einen Merge Request. Sie mergen
+nicht selbst in `master` oder den ausdrücklich festgelegten geschützten
+Integrationsbranch. Nur der Maintainer führt den Merge durch, deployed den
+gemergten Stand und verwaltet die dafür benötigte Infrastruktur.
+
+Für UI-Arbeit muss der `impeccable`-Skill im Skill-Katalog des Kollegen
+installiert sein. Das Plugin enthält die verbindliche Aktivierungs- und
+Abbruchregel, vendiert den externen Skill aber nicht. Der Agent lädt vor jeder
+UI-Änderung dessen vollständige Anleitung, Projekt- und Designkontext sowie den
+passenden Impeccable-Arbeitsablauf.
+
+Bei Kundendaten minimiert und anonymisiert der Agent zuerst. Müssen Kundendaten
+verarbeitet werden, prüft er Modellanbieter, Endpunkt, Telemetrie und Fallbacks
+und nutzt standardmäßig einen lokalen oder unternehmenskontrollierten
+On-Premises-KI-Pfad ohne Cloud-Fallback. Ein nicht verifizierter Pfad gilt als
+Cloud-Pfad und wird nicht verwendet.
 
 ## Installation
 
@@ -72,26 +139,49 @@ noch zum Plugin passt. Der zugrunde liegende Check ist:
 "${CLAUDE_PLUGIN_ROOT}/scripts/project-buzz" install --check
 ```
 
+## Git-Remotes und Beiträge
+
+GitHub ist der öffentliche Marketplace- und Distributionsspiegel. Dort werden
+freigegebene Plugin-Versionen bereitgestellt, damit Installation und Updates in
+Claude Code funktionieren. Die eigentliche Entwicklung läuft über folgende
+private Wege:
+
+- Das Entwicklungsbüro Burglengenfeld verwendet das interne GitLab-Projekt.
+- Freigeschaltete externe Entwickler verwenden das private Repository auf dem
+  in Buzz integrierten Git-Server. Authentifizierung und Zusammenarbeit laufen
+  dort über NIP-98 und NIP-34.
+- Beitragende arbeiten in einem eigenen Worktree und Task-Branch, pushen diesen
+  Branch zum passenden privaten Remote und erstellen einen Merge Request.
+- Nur der Maintainer mergt nach `main`, veröffentlicht Versionen und spiegelt
+  die freigegebene Fassung nach GitHub.
+
+Beiträge und Sicherheitsmeldungen laufen über die oben genannten privaten Wege.
+
 ## Voraussetzungen
 
 - Claude Code mit Plugin-Unterstützung
+- Für UI-Arbeit ein installierter `impeccable`-Skill
 - Python 3.8 oder neuer
 - Eine erreichbare Buzz-Relay-Instanz
-- `buzz` für den laufenden Betrieb
-- `buzz-admin` und `compute_auth_tag` für die einmalige Agent-Identität
+- `buzz` für den laufenden Betrieb, das einzige benötigte Programm
 - Eine eigene Buzz-Human-Identität, die am selben Relay als Mitglied eingetragen
   ist. Verlangt der Relay Mitgliedschaft, trägt der Owner sie ein, bevor die
   Agent-Identität erzeugt wird (siehe „Runbook für den Buzz-Owner")
 
-Buzz Desktop liefert den `buzz`-CLI auf unterstützten Plattformen als Sidecar.
-Alternativ können die drei Werkzeuge aus dem Buzz-Quellbaum gebaut werden:
+Buzz Desktop liefert den `buzz`-CLI auf allen unterstützten Plattformen als
+Sidecar, unter macOS, Windows und Linux. Alternativ aus dem Buzz-Quellbaum:
 
 ```bash
-cargo build --release -p buzz-cli -p buzz-admin
-cargo build --release -p buzz-sdk --example compute_auth_tag
+cargo build --release -p buzz-cli
 ```
 
 Dieses Repository verteilt keine Buzz-Binaries.
+
+Schlüsselpaar und Owner-Attestierung erzeugt der Helper seit 0.14.0 selbst, mit
+der Standardbibliothek von Python. `buzz-admin` und `compute_auth_tag` braucht
+niemand mehr auf seinem Rechner. Ältere Konfigurationen dürfen die Einträge
+`buzz_admin_bin` und `auth_tag_bin` behalten, `doctor` weist einmal darauf hin,
+dass sie entfernt werden können.
 
 ## Identitäts- und Berechtigungsmodell
 
@@ -135,8 +225,6 @@ zu tun ist.
   "relay_url": "https://buzz.example.org",
   "agent_name": "claude.alex",
   "buzz_bin": "buzz",
-  "buzz_admin_bin": "buzz-admin",
-  "auth_tag_bin": "compute_auth_tag",
   "projects": {}
 }
 ```
@@ -258,14 +346,28 @@ project-buzz provision --display-name <name> [--about <text>]
 project-buzz register <repo-id> [--path <path>] [--channel <uuid>]
 project-buzz resolve [repo-id]
 project-buzz context [repo-id] [limit]
+project-buzz open [repo-id] [limit]
 project-buzz start <update-id> <text> [repo-id]
 project-buzz progress <update-id> <root-event-id> <text> [repo-id]
 project-buzz blocked <update-id> <root-event-id> <text> [repo-id]
 project-buzz result <update-id> <root-event-id> <text> [repo-id]
+project-buzz correct <update-id> <text> --supersedes <event-id> [repo-id]
 project-buzz attach <update-id> <text> <files...> [--repo-id <repo-id>]
 project-buzz doctor
 project-buzz --version
 ```
+
+`start`, `progress`, `blocked` und `result` bilden den normalen Lifecycle.
+`correct` widerruft ein bereits publiziertes Ergebnis als eigenen
+Top-Level-Post: Der Helper fügt `Korrigiertes Event: <id>` hinzu und schließt
+damit den betroffenen Thread aus der `open`-Sicht. `open` gruppiert Nachrichten
+über die Reply-`e`-Tags zu Threads und listet jene, die mit einem Start begannen,
+aber noch kein `result`, `blocked` oder `correct` erreicht haben (Standard-Limit
+100, maximal 200).
+
+Ein hängender `buzz`-CLI-Aufruf beendet den Helper nach 60 Sekunden statt den
+Agenten zu hängen; für Tests lässt sich das Limit über
+`BUZZ_AGENT_CLI_TIMEOUT_SECONDS` verkürzen.
 
 Lifecycle-Posts werden anhand Phase und Update-ID dedupliziert. Anhänge werden
 bewusst top-level veröffentlicht, damit sie nicht in einem eingeklappten Thread
@@ -294,10 +396,10 @@ maskiert werden. Geschäftsdaten dürfen nicht eigens für einen schöneren
 Screenshot erfunden werden.
 
 Bitte keine realen Relay-URLs, Channel-UUIDs, Public Keys, Auth-Tags, lokale
-Identitätsdateien oder proprietären Projektinhalte in Issues und Pull Requests
-einfügen. Verwende reduzierte, synthetische Beispiele.
+Identitätsdateien oder proprietären Projektinhalte in öffentliche GitHub-Issues
+oder Pull Requests einfügen. Verwende reduzierte, synthetische Beispiele.
 
-Sicherheitsprobleme bitte privat über GitHub Security Advisories melden, siehe
+Sicherheitsprobleme gehören in den privaten Entwicklungsweg, siehe
 [SECURITY.md](SECURITY.md).
 
 ## Entwicklung und Tests
@@ -315,8 +417,9 @@ Deduplication, Anhänge und Dateirechte.
 
 [MIT](LICENSE)
 
-Der mitgelieferte Skill `no-ai-slop` stammt von Peter Yang und steht ebenfalls
-unter MIT. Seine Lizenzdatei liegt unverändert neben dem Skill unter
+Der mitgelieferte Skill `no-ai-slop` stammt von Peter Yang, wurde für
+deutschsprachige Texte angepasst und steht weiterhin unter MIT. Seine
+Lizenzdatei liegt unverändert neben dem Skill unter
 `plugins/buzz-comms/skills/no-ai-slop/LICENSE` und gehört zu jeder Kopie.
 Das danebenliegende `voice-profile.md` beschreibt ausschließlich den
 öffentlichen Stil für Buzz-Lifecycle-Texte. Private Schreibproben und

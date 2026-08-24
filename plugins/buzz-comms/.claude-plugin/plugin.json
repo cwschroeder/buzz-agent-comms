@@ -1,7 +1,7 @@
 {
   "name": "buzz-comms",
-  "version": "0.5.1",
-  "description": "Coordinate project work in Buzz and prove user-visible delivery with live checks and screenshots.",
+  "version": "0.15.0",
+  "description": "Apply the shared engineering contract, coordinate work in Buzz, and prove delivery.",
   "author": {
     "name": "Christian Schröder"
   }

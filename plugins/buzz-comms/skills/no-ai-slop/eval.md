@@ -1,59 +1,69 @@
-# No AI slop eval
+# Prüfung gegen KI-Floskeln
 
-Use this after generating or rewriting prose. Answer each check with pass or fail. If any check fails, fix the text before returning it.
+Nutze diese Liste nach jedem Erstellen oder Redigieren lesergerichteter Prosa. Beantworte jeden Punkt mit bestanden oder fehlgeschlagen. Behebe alle Fehler, bevor du den Text zurückgibst oder veröffentlichst.
 
-For detect requests, make sure the response names each pattern found with a quoted line and a short fix, without rewriting the draft.
+Bei einer reinen Prüfung muss der Befund jedes gefundene Muster benennen, die betroffene Stelle zitieren und die Korrektur kurz beschreiben. Schreibe den Entwurf dabei nicht um und behaupte nicht, eine KI habe ihn verfasst.
 
-## Editing principles
+## Sprache
 
-1. Does the edit preserve the user's point without adding claims, examples, stats, quotes, or opinions?
-2. Does it preserve the writer's distinctive vocabulary, cadence, bluntness, humor, uncertainty, digressions, and level of polish?
-3. Does it leave strong human sentences alone instead of rewriting them for consistency or making every paragraph equally tidy?
-4. Is the amount of cutting proportional to the actual slop, with no aggressive compression that strips out character?
-5. Does the draft lead with what the reader needs while keeping personal setup that adds context, tension, or character?
-6. Are points front-loaded where that improves clarity without forcing every unit into the same structure?
-7. Do sentences earn their place, with concrete facts, protected details, and direct verbs where the draft supports them?
-8. Does the draft use active voice with human subjects where possible?
-9. Does the edit keep useful edge and preserve structure unless the structure was hurting the piece?
-10. Are genuinely tangled sentences fixed while clear spoken cadence, fragments, and changes in pace remain intact?
+1. Entspricht die Sprache der Zielgruppe, dem Entwurf und der aktuellen Nutzeranweisung?
+2. Wurde bei deutschem Entwurf oder deutschsprachigem Projektkontext standardmäßig Deutsch verwendet?
+3. Wurde deutscher Text gegen die deutschen Wörter, Wendungen und Beispiele aus `SKILL.md` geprüft?
+4. Wurden technische Bezeichner, Pfade, Befehle, Eigennamen und Zitate unverändert gelassen?
 
-## Voice and format
+## Grundsätze beim Redigieren
 
-1. For Buzz lifecycle text, was `voice-profile.md` read and applied without quoting the profile?
-2. Does the text lead with verified scope or status and make the next action or blocker easy to find?
-3. Does the text match a compact project update instead of imposing article or marketing structure?
-4. In generation mode, did the writer avoid inventing facts, commitments, dates, measurements, URLs, or runtime state?
+1. Erhält die Überarbeitung die Aussage, ohne Behauptungen, Beispiele, Zahlen, Zitate oder Meinungen hinzuzufügen?
+2. Bleiben Wortwahl, Rhythmus, Direktheit, Humor, Unsicherheit, Abschweifungen und Ausarbeitungsgrad des Verfassers erkennbar?
+3. Bleiben starke menschliche Sätze stehen, statt nur für Einheitlichkeit geglättet zu werden?
+4. Ist der Umfang der Änderungen dem tatsächlichen Problem angemessen, ohne Charakter wegzukürzen?
+5. Beginnt der Text mit dem, was der Leser braucht, und bleiben persönliche Einstiege erhalten, wenn sie Kontext, Spannung oder Charakter schaffen?
+6. Stehen Aussagen dort weiter vorn, wo es die Klarheit verbessert, ohne jeden Abschnitt in dieselbe Struktur zu zwingen?
+7. Hat jeder Satz einen Zweck und bleiben belegte konkrete Fakten, Details und direkte Verben erhalten?
+8. Verwendet der Text nach Möglichkeit aktive Formulierungen mit menschlichen Subjekten?
+9. Bleiben nützliche Kante und die vorhandene Struktur erhalten, solange die Struktur den Text nicht behindert?
+10. Sind schwer verständliche Sätze entwirrt, während klare gesprochene Rhythmen, Fragmente und Tempowechsel erhalten bleiben?
 
-## Words to cut
+## Stimme und Format
 
-1. Are banned words, filler phrases, often-empty adverbs, and inflated claims removed unless quoted as examples?
+1. Wurde bei Buzz-Lifecycle-Texten `voice-profile.md` gelesen und angewendet, ohne daraus zu zitieren?
+2. Beginnt der Text mit belegtem Umfang oder Status und ist die nächste Handlung oder der Blocker leicht zu finden?
+3. Passt die Form zu einem kompakten Projektupdate, statt eine Artikel- oder Marketingstruktur aufzuzwingen?
+4. Wurden beim Erstellen keine Fakten, Zusagen, Daten, Messwerte, URLs oder Laufzeitstände erfunden?
 
-## Patterns to cut
+## Wörter und Wendungen
 
-1. Are binary contrasts, negative listings, rhetorical setups, and throat-clearing openers removed?
-2. Are faux-insight setups, colon reveals, superficial analysis, fake-strong verbs, synonym cycling, dramatic fragments, and robotic rhythm fixed?
-3. Are importance puffery and weasel attribution replaced with plain facts and named sources, or flagged for the user when no source exists?
-4. Are fake-profound kicker lines deleted instead of rewritten into better metaphors?
-5. Are summary-recap endings cut so the piece ends on a concrete point, takeaway, or next action?
-6. Is formatting slop removed: Emoji headings, decorative bold, bullets that should be prose, headers over tiny sections?
-7. Are colons sentence case unless grammar, a proper noun, a title, or code requires otherwise?
-8. Are em dashes used sparingly: Usually none in short copy, and only 1-2 in longer drafts when they clearly help?
+1. Sind verbotene Wörter, leere Einleitungen, unnötige Adverbien und aufgeblähte Behauptungen entfernt, sofern sie nicht als Beispiel oder Quelle zitiert werden?
 
-## German Buzz prose
+## Muster
 
-1. Does German prose use real `ä`, `ö`, `ü`, `Ä`, `Ö`, `Ü`, and `ß`, with no
-   `fuer`, `fuenf`, `Naechster`, `Buendel`, `aendern`, or `pruefen` outside
-   technical identifiers, paths, commands, or quoted source text?
-2. Are translated AI openings, recap phrases, binary contrasts, and inflated
-   project language removed?
-3. Does a lifecycle update read like a compact colleague update instead of a
-   generated mini-report?
+1. Sind künstliche Gegensätze, negative Aufzählungen, rhetorische Inszenierungen und anlaufende Einleitungen entfernt?
+2. Sind scheinbare Insider-Erkenntnisse, dramatische Doppelpunkt-Enthüllungen, oberflächliche Deutungen, künstlich starke Verben, Synonymwechsel, dramatische Fragmente und Roboter-Rhythmus behoben?
+3. Wurden Bedeutungsaufblähung und unklare Zuschreibungen durch schlichte Fakten und benannte Quellen ersetzt oder als ungeklärt markiert?
+4. Wurde ein scheinbar tiefgründiger Schlusssatz gelöscht, statt in eine bessere Metapher umgeschrieben zu werden?
+5. Endet der Text mit einem konkreten Punkt, einer Aussage oder einer nächsten Handlung statt mit einer Zusammenfassung?
+6. Sind Formatierungsfloskeln entfernt: Emojis in Überschriften, dekoratives Fett, unnötige Listen und Überschriften über winzigen Abschnitten?
+7. Folgt nach einem Doppelpunkt die grammatisch passende Groß- oder Kleinschreibung?
+8. Enthält der Text keine Halbgeviertstriche oder Geviertstriche?
 
-## Final read
+## Deutsche Buzz-Texte
 
-1. Was the edit checked directly against this file without requiring separate editor and evaluator agents?
-2. Does the draft avoid robotic symmetry, repeated sentence shapes, and stacked punchy fragments?
-3. Would the writer recognize the edited draft as their own voice?
-4. Would the edited draft sound natural if read to a sharp colleague?
-5. Does the final output contain the complete reader-ready text, with **What changed** only when an edit or explanation was requested?
-6. For detect requests, does the response name each pattern with a quoted line and a short fix, without rewriting, scoring, or claiming AI authorship?
+1. Verwendet deutsche Prosa echte `ä`, `ö`, `ü`, `Ä`, `Ö`, `Ü` und `ß`, ohne Formen wie `fuer`, `fuenf`, `Naechster`, `Buendel`, `aendern` oder `pruefen` außerhalb technischer Bezeichner, Pfade, Befehle, URLs und zitierter Quellen?
+2. Sind übersetzte KI-Einstiege, Rückblicke, künstliche Gegensätze und aufgeblähte Projektsprache entfernt?
+3. Klingt die Lifecycle-Nachricht wie ein knappes Update eines Kollegen statt wie ein erzeugter Mini-Bericht?
+
+## Ergebnis und Korrektur
+
+1. Beginnt ein Ergebnis mit genau einem belegten Zustand: `Review-ready`, `Merged`, `Deployed` oder `Extern verifiziert`?
+2. Nennt eine Diagnose ihre Belegtiefe: was gemessen und womit es abgeglichen wurde, oder dass es sich um eine Einschätzung handelt?
+3. Ist jede Korrektur ein Top-Level-Beitrag, nennt das ersetzte Event und erklärt zuerst, welche vorherige Aussage falsch war?
+4. Enthält der Text keine Geheimnisse und klingt er nicht sicherer, als die Belege erlauben?
+
+## Schlussprüfung
+
+1. Wurde der Text direkt gegen diese Datei geprüft, ohne dafür getrennte Redigier- und Prüfagenten zu verlangen?
+2. Vermeidet der Text künstliche Symmetrie, wiederholte Satzformen und gestapelte kurze Sätze?
+3. Würde der Verfasser die überarbeitete Fassung als die eigene Stimme erkennen?
+4. Klingt der Text natürlich, wenn er einem aufmerksamen Kollegen vorgelesen wird?
+5. Enthält die Ausgabe den vollständigen, veröffentlichungsreifen Text und `Was geändert wurde` nur bei einer ausdrücklich verlangten Überarbeitung oder Erklärung?
+6. Benennt eine reine Prüfung jedes Muster mit Zitat und kurzer Korrektur, ohne umzuschreiben, zu bewerten oder eine KI-Urheberschaft zu behaupten?

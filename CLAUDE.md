@@ -5,14 +5,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this repository is
 
 A Claude Code **plugin marketplace** (`buzz-agent-comms`) containing one plugin
-(`buzz-comms`). The plugin lets a colleague's coding agent report into the same
-private Buzz project channels as the Buzz owner's own agents: one project, one
-channel, one shared history, regardless of whose machine the agent runs on.
+(`buzz-comms`). The plugin applies a shared engineering contract and lets a
+colleague's coding agent report into the same private Buzz project channels as
+the Buzz owner's own agents: one project, one channel, one shared history,
+regardless of whose machine the agent runs on.
 
 There is no compiler and no build step. The deliverable is a Python helper
 (standard library only) plus markdown that instructs the agent.
 
-Public remote: `https://github.com/cwschroeder/buzz-agent-comms`.
+Public distribution mirror: `https://github.com/cwschroeder/buzz-agent-comms`.
+
+Development does not happen on that GitHub mirror. The Burglengenfeld
+development office uses its internal GitLab project. Approved external
+developers use the private repository on Buzz's integrated Git server with
+NIP-98 authentication and NIP-34 issues, patches and merge requests. The
+maintainer mirrors released versions to GitHub for Marketplace installation and
+updates.
 
 This repository is public. Never add real relay URLs, channel UUIDs, public or
 private identity material, auth tags, customer names, proprietary project data,
@@ -24,15 +32,23 @@ internal hostnames, or local operator paths. Use synthetic examples only.
 .claude-plugin/marketplace.json          # marketplace manifest, lists the plugin
 plugins/buzz-comms/
 ├── .claude-plugin/plugin.json           # plugin manifest (name, version, author)
+├── skills/engineering-contract/
+│   └── SKILL.md                         # worktrees, roles, UI and customer-data policy
 ├── skills/buzz-team-communication/
 │   └── SKILL.md                         # the behavioural contract for the agent
-├── skills/no-ai-slop/                   # vendored, MIT, Peter Yang — edits every
+├── skills/no-ai-slop/                   # vendored, MIT, Peter Yang, edits every
 │   ├── SKILL.md                         #   lifecycle text before it is published
 │   ├── eval.md                          #   the post-edit checklist
 │   └── LICENSE                          #   keep this file with any copy
+├── skills/show-me/                      # compact visuals for channel posts
+│   └── SKILL.md                         #   ASCII, Mermaid, diffs, HTML preview
+├── skills/bro/                          # vendored MIT luchasarie/bro-skill
+│   ├── SKILL.md                         #   /bro: plain-language re-explainer
+│   └── LICENSE                          #   keep this file with any copy
 ├── commands/
 │   ├── buzz-setup.md                    # /buzz-comms:buzz-setup: guided onboarding
-│   └── buzz-status.md                   # /buzz-comms:buzz-status: read-only diagnostics
+│   ├── buzz-status.md                   # /buzz-comms:buzz-status: read-only diagnostics
+│   └── bro.md                           # /bro: plain-language re-explainer
 ├── scripts/project-buzz                 # the deterministic helper (Python 3.8+)
 └── tests/test_project_buzz.py           # unittest suite, runs without a relay
 README.md                                # operator and colleague documentation (German)
@@ -61,11 +77,20 @@ Use `python`, not `python3`, when running anything on Windows. See
 
 ## Architecture
 
-Two layers with a deliberate split of responsibility:
+Three policy surfaces and one mechanics layer have separate responsibilities:
 
-- **`SKILL.md` and the commands** hold the *policy*: when the agent must read the
+- **`skills/engineering-contract/SKILL.md`** holds the shared development
+  contract: worktrees, contributor merge requests, maintainer-only merges and
+  deployments, infrastructure ownership, Impeccable UI work, and local AI for
+  customer data.
+- **`skills/buzz-team-communication/SKILL.md` and the commands** hold the Buzz
+  policy: when the agent must read the
   channel, what counts as delivery proof, what must never be published. This
-  prose is the contract, so treat wording changes as behaviour changes.
+  prose is the contract, so treat wording changes as behaviour changes. Two
+  advisory skills shape every publication: `no-ai-slop` edits the prose, and
+  `show-me` adds one compact diagram when the update is clearer as a picture.
+  `bro` rides along as a vendored general quality-of-life skill: `/bro`
+  re-explains the previous answer in plain language, it has no lifecycle role.
 - **`scripts/project-buzz`** holds the *mechanics*: identity, project resolution,
   marker construction, validation, deduplication, attachments. The agent is told
   to never bypass it (no direct `buzz messages send` for lifecycle text).
@@ -74,12 +99,16 @@ Two layers with a deliberate split of responsibility:
 
 `scripts/project-buzz` is a single file, grouped in this order: regexes and
 limits, config/state paths, config and identity IO, agent name and relay,
-binary resolution, `buzz` invocation, project resolution, validation, marker
-building, `publish`/`publish_attachments`, then one `command_*` function per
-subcommand, then the argparse wiring. Keep new code in the matching group.
+binary resolution, NIP-OA key material, `buzz` invocation, project resolution,
+validation, marker building, `publish`/`publish_attachments`, then one
+`command_*` function per subcommand, then the argparse wiring. Keep new code in
+the matching group.
 
-Subcommands: `install`, `provision`, `register`, `resolve`, `context`,
-`start`/`progress`/`blocked`/`result`, `attach`, `doctor`.
+The file is installed by copying it, so it must stay one file with no imports
+beyond the standard library.
+
+Subcommands: `install`, `provision`, `register`, `resolve`, `context`, `open`,
+`start`/`progress`/`blocked`/`result`, `correct`, `attach`, `doctor`.
 
 ### Local state
 
@@ -98,8 +127,10 @@ Docs and skill must always reference the installed path, never the plugin path.
 ### Identity model
 
 Each colleague generates their own agent key pair locally and attests it to
-their **own** Buzz human key via NIP-OA. No private key is ever shared; only the
-agent's public key is exchanged. The relay grants access because the owner is a
+their **own** Buzz human key via NIP-OA. Both steps happen inside the helper
+process, so no extra binary is needed and the owner key never reaches a child
+process. The owner key is accepted as `nsec1...` or as 64 hex characters. No
+private key is ever shared; only the agent's public key is exchanged. The relay grants access because the owner is a
 relay member (`BUZZ_REQUIRE_RELAY_MEMBERSHIP` plus `BUZZ_ALLOW_NIP_OA_AUTH`).
 
 Relay access is not channel access: the Buzz owner must additionally add the
@@ -116,8 +147,10 @@ colleague's machine must be indistinguishable in shape from the owner's. Do not
 change these without changing the owner side in lockstep:
 
 - **Marker format.** `[AGENT-ACTIVITY:started:<agent>:<id>]`,
-  `[AGENT-ACTIVITY:progress|blocked:<agent>:<id>]`,
-  `[AGENT-RESULT:<agent>:<id>]`. Note that `start` maps to `started`.
+  `[AGENT-ACTIVITY:progress|blocked|correction:<agent>:<id>]`,
+  `[AGENT-RESULT:<agent>:<id>]`. Note that `start` maps to `started` and
+  `correction` is a closing phase like `result` and `blocked` (posted
+  top-level, supersedes an earlier event).
 - **Content validation.** Caller content is 1 to 4000 characters and cannot
   contain `[PILOT-` or `[AGENT-`. Before publishing text with an at-sign, the
   helper resolves current channel profiles and rejects only real identity
@@ -128,6 +161,14 @@ change these without changing the owner side in lockstep:
   outside inline code, fenced code, URLs, and Markdown block quotes. Paths and
   technical identifiers must use code formatting. Keep this boundary
   deterministic and cover it with examples from real Buzz regressions.
+- **Secret validation.** Common credential shapes (`nsec1...`, `sk-...`,
+  `ghp_...`/`github_pat_...`, `xox...`, `AKIA...`, `Bearer <token>`, and
+  `key: <value>` assignments of at least 16 characters) are rejected before
+  any publish. Keep every pattern small, documented, and covered by a test;
+  the guard is a safety net, not an exhaustive secret detector.
+- **CLI timeouts.** `run_buzz` times out after a bounded number of seconds
+  (default 60, `BUZZ_AGENT_CLI_TIMEOUT_SECONDS` for tests). A hung CLI raises
+  `UserError`; it must never hang the agent.
 - **Agent name shape.** `<client>.<person>`, lowercase, from config only, never a
   caller argument. A bare `claude` would be charged to the owner's seat ledger.
 - **Deduplication.** The lock directory is the mutex; a failed publish must
@@ -136,8 +177,19 @@ change these without changing the owner side in lockstep:
   into the collapsible lifecycle thread.
 - **Fail closed.** An unregistered workspace or unknown repo id is an error;
   never fall back to a neighbouring channel.
-- **No crypto here.** Signing happens inside the `buzz` CLI. The helper must
-  never implement crypto and never print private key material, not even on error.
+- **Crypto only for provisioning.** Event signing happens inside the `buzz` CLI.
+  The single exception is the agent key pair and the NIP-OA owner attestation,
+  which the helper builds itself so a colleague needs no extra binaries for
+  their platform. That code stays in the "NIP-OA key material" section, uses
+  only `hashlib` and `secrets`, verifies every signature before returning it,
+  and is pinned by the published BIP-340 vectors plus a tag produced by the
+  Rust reference. Do not grow it: anything beyond provisioning belongs in the
+  `buzz` CLI. The helper must never print private key material, not even on
+  error, and must never pass a key on a command line.
+- **The NIP-OA preimage is a protocol contract.**
+  `"nostr:agent-auth:" + agent_pubkey_hex + ":" + conditions`, SHA-256, signed
+  BIP-340. It must match `buzz-sdk`'s `nip_oa` exactly; changing it invalidates
+  every identity already granted on a relay.
 
 ## Editing rules
 
@@ -213,9 +265,11 @@ This repo is developed on Windows, so Windows must keep working.
   instead
 
 ### Documentation language
-- `README.md` is German: it addresses the colleague and the Buzz owner
-- `SKILL.md`, the command markdown and the helper's comments are English: they
-  address the agent and sit next to English tooling
+- `README.md`, `SECURITY.md` and the vendored `no-ai-slop` files are German.
+  `no-ai-slop` defaults to German for German input and project context, while it
+  keeps English checks for English output.
+- Other `SKILL.md` files, command markdown and helper comments are English: they
+  address the agent and sit next to English tooling.
 
 ### Versioning
 - Semantic version without a `v` prefix (`0.2.0`, not `v0.2.0`)
