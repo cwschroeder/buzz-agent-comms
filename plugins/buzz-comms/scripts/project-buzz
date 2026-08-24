@@ -1481,7 +1481,7 @@ def command_correct(arguments: argparse.Namespace) -> int:
     """
     config = load_config()
     validate_root_event(arguments.supersedes)
-    content = "{0}\n\nKorrigiertes Event: {1}".format(
+    content = "{0} Korrigiertes Event: {1}".format(
         arguments.content.rstrip(), arguments.supersedes
     )
     payload = publish(

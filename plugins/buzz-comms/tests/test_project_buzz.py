@@ -834,6 +834,7 @@ class CorrectionPhase(HelperTestCase):
         self.assertIn(
             "Korrigiertes Event: {0}".format(superseded), content
         )
+        self.assertNotIn("\n", content)
 
     def test_correction_requires_a_valid_superseded_event(self):
         self.assertEqual(
