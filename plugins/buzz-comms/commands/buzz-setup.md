@@ -131,7 +131,35 @@ Once the grant is in place, run inside each project checkout:
 The repo id is the one the Buzz owner used in the grant. The helper finds the
 matching channel and stores the mapping.
 
-## 7. Verify
+## 7. Optional: the project's git repositories
+
+Ask whether the user also needs the project's git repositories from the relay.
+Skip this step when they already have them from a forge.
+
+The relay serves git over HTTPS and authenticates with the same Nostr identity.
+Buzz Desktop ships the credential helper next to the CLI, so nothing has to be
+built. Git 2.46 or newer is required.
+
+```bash
+git config --global credential.helper <absolute path to git-credential-nostr>
+git config --global credential.useHttpPath true
+mkdir -p ~/.nostr
+touch ~/.nostr/key && chmod 600 ~/.nostr/key   # then paste the own nsec into it
+git config --global nostr.keyfile ~/.nostr/key
+```
+
+The clone URL is `https://<relay>/git/<owner-pubkey-hex>/<repo>.git`. The owner
+pubkey and repo id come from the repository announcement, which the Buzz owner
+supplies together with the channel grant.
+
+If a clone reports `repository not found`, the key is not a member of the
+channel the repository is bound to. That is a grant question, not a URL
+question.
+
+Contribution rules for these repositories live in the `engineering-contract`
+skill, section "Contributing over the Buzz git remote".
+
+## 8. Verify
 
 ```bash
 ~/.config/buzz-agent/bin/project-buzz doctor

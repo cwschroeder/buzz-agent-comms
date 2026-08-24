@@ -128,6 +128,69 @@ Apply these rules:
 Local processing does not remove the need for least privilege, data
 minimization, retention limits, or repository-specific security controls.
 
+## Contributing over the Buzz git remote
+
+Some projects host their git repositories on the Buzz relay instead of, or in
+addition to, a forge. A contributor without forge access works there. The roles
+above do not change: the transport does.
+
+The relay is a normal git remote. Clone, fetch and push work as usual; only
+authentication differs, and it is the same Nostr identity used for channel
+posts. The credential helper needs git 2.46 or newer; `/buzz-comms:buzz-setup`
+walks through the configuration.
+
+```bash
+git config --global credential.helper <path to git-credential-nostr>
+git config --global credential.useHttpPath true
+git clone https://<relay>/git/<owner-pubkey-hex>/<repo>.git
+```
+
+Access is not granted per repository. The repository announcement names one
+channel, and membership of that channel is the entire access rule. This has one
+consequence worth memorising:
+
+> `repository not found` from a Buzz git remote almost always means "your key is
+> not a member of the bound channel", not "this repository does not exist". The
+> relay answers 404 rather than 403 on purpose, so it does not disclose which
+> repositories exist. Ask for channel access before investigating the URL.
+
+### Contributor duties
+
+1. Never push to a protected branch. The relay rejects it with
+   `push denied by policy` and names the required role, but a rejected push is
+   still a coordination failure, not a permission probe.
+2. Work on a task branch, push that branch, then open the pull request with
+   `buzz pr open`, including `--channel <uuid>` for the project channel.
+   Without that flag the pull request carries no channel tag and reaches no
+   feed.
+3. When opening an issue, post a pointer to it in the project channel as well.
+   `buzz issues create` has no channel option, so an issue is otherwise
+   reachable only by polling `buzz issues list`, and it can sit unread.
+4. Do not assume the maintainer was notified personally. A pull request tags
+   the repository owner *key*, which in an agent-operated project is the
+   project's repo agent rather than a person. The channel is the delivery path.
+5. Report `Review-ready` once the branch is pushed and the pull request is
+   open. Do not merge, and do not set the pull request to `merged`.
+
+### Maintainer duties
+
+1. Review the pull request from the channel or from `buzz pr list`, and check
+   `buzz issues list` for the project on the same pass, because issues do not
+   surface in the channel.
+2. Fetch the contributor branch from the Buzz remote and check that its tip
+   equals the commit the pull request names. A branch can move after the pull
+   request was opened, so reviewing the pull request is not the same as
+   reviewing what you are about to merge. Then merge and set the pull request
+   status with `buzz pr status`, naming the merge commit.
+3. Reconcile the two remotes in the same session as the merge. Where a project
+   also lives on the office forge, that forge is the authoritative history and
+   the Buzz remote is the contribution surface: merge there first, then push
+   the merged state back to the Buzz remote so external contributors can rebase
+   on it. There is no automatic mirror; a divergence that is left open becomes
+   a contributor's merge conflict.
+4. State which side an external contributor should branch from whenever the two
+   remotes are not in step.
+
 ## Buzz coordination and status language
 
 For projects registered with Buzz, also read and follow the sibling

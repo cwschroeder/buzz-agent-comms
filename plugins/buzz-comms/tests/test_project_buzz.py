@@ -723,6 +723,50 @@ class PolicyContract(unittest.TestCase):
         )
         self.assertIn("| `engineering-contract` |", readme)
 
+    def test_buzz_git_remote_contribution_rules_are_binding(self):
+        """The rules that keep a forge-less contributor from silent failure.
+
+        Each phrase encodes a failure seen while exercising the relay's git
+        server: a 404 that means "no channel grant", an issue that reaches no
+        feed, a pull request that notifies a key rather than a person, and two
+        remotes drifting apart because no one owns the reconciliation.
+        """
+        skill_root = SCRIPTS.parent / "skills"
+        contract = (skill_root / "engineering-contract" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        setup = (SCRIPTS.parent / "commands" / "buzz-setup.md").read_text(
+            encoding="utf-8"
+        )
+        readme = (SCRIPTS.parents[2] / "README.md").read_text(encoding="utf-8")
+
+        self.assertIn("## Contributing over the Buzz git remote", contract)
+        for phrase in (
+            # A 404 is an access answer, not a missing repository.
+            "not a member of the bound channel",
+            # Protected branches are refused by the relay itself.
+            "Never push to a protected branch",
+            # Without --channel the pull request reaches no feed.
+            "--channel <uuid>",
+            # Issues carry no channel tag at all.
+            "post a pointer to it in the project channel",
+            "buzz issues list",
+            # The p-tag names the owner key, not a person.
+            "repository owner *key*",
+            # Nothing mirrors the two remotes automatically.
+            "There is no automatic mirror",
+        ):
+            self.assertIn(phrase, contract)
+
+        # Both sides of the contract must be present, not just the contributor.
+        self.assertIn("### Contributor duties", contract)
+        self.assertIn("### Maintainer duties", contract)
+
+        # Onboarding has to hand over the clone mechanics, the skill only rules.
+        self.assertIn("credential.useHttpPath", setup)
+        self.assertIn("/git/<owner-pubkey-hex>/<repo>.git", setup)
+        self.assertIn("Beiträge über das Buzz-Git-Remote", readme)
+
     def test_plugin_commands_are_documented_with_namespace(self):
         repository = SCRIPTS.parents[2]
         paths = (

@@ -71,7 +71,7 @@ lokalen Helper für signierte, deduplizierte Buzz-Nachrichten.
 
 | Komponente | Aufgabe |
 |---|---|
-| `engineering-contract` | Worktrees, Merge Requests, Maintainer-Rollen, Impeccable und lokale KI bei Kundendaten |
+| `engineering-contract` | Worktrees, Merge Requests, Maintainer-Rollen, Beiträge über das Buzz-Git-Remote, Impeccable und lokale KI bei Kundendaten |
 | `buzz-team-communication` | Verbindlicher Kommunikations- und Delivery-Proof-Workflow |
 | `no-ai-slop` | Redigiert jeden Lifecycle-Text, bevor er im Kanal landet |
 | `show-me` | Liefert kompakte Diagramme (ASCII, Mermaid, Diff, HTML) für Pläne, Änderungen und offene Threads |
@@ -116,13 +116,6 @@ In Claude Code:
 /plugin install buzz-comms@buzz-agent-comms
 /buzz-comms:buzz-setup
 ```
-
-> [!IMPORTANT]
-> Aktiviere direkt nach der Installation die automatischen Updates. Claude Code
-> schaltet sie für Drittanbieter-Marketplaces nicht standardmäßig ein. Öffne
-> `/plugin`, wechsle zu `Marketplaces`, wähle `buzz-agent-comms` und aktiviere
-> `Enable auto-update`. Wenn Claude Code ein Update meldet, übernimmst du es mit
-> `/reload-plugins` oder beim nächsten Start.
 
 `/buzz-comms:buzz-setup` kopiert den Helper nach
 `~/.config/buzz-agent/bin/project-buzz`. Dadurch hängt die Laufzeit nicht vom
@@ -261,6 +254,34 @@ Im Projekt-Checkout:
 
 Bei abweichender Channel-Namenskonvention kann die UUID explizit mit
 `--channel <uuid>` angegeben werden.
+
+## Beiträge über das Buzz-Git-Remote
+
+Liegen die Repositories eines Projekts auf dem Relay, arbeitet ein Kollege ohne
+Forge-Zugang direkt dort. Der Relay ist ein normales Git-Remote, nur die
+Anmeldung läuft über dieselbe Nostr-Identität wie die Kanalbeiträge. Buzz
+Desktop liefert den Credential-Helper neben dem CLI mit, Git ab 2.46 genügt.
+
+```bash
+git config --global credential.helper <Pfad zu git-credential-nostr>
+git config --global credential.useHttpPath true
+git clone https://<relay>/git/<owner-pubkey-hex>/<repo>.git
+```
+
+Der Zugang hängt nicht am Repository, sondern am Kanal, an den es gebunden ist.
+Deshalb bedeutet `repository not found` fast immer, dass der Schlüssel nicht im
+gebundenen Kanal ist. Der Relay antwortet absichtlich mit 404 statt 403, damit
+er die Existenz nicht verrät.
+
+Der Beitragsweg: Task-Branch pushen, dann `buzz pr open` mit `--channel`, damit
+der Pull Request im Projektkanal auftaucht. Geschützte Branches weist der Relay
+mit `push denied by policy` ab. Issues tragen keine Kanalbindung, wer eines
+eröffnet, setzt zusätzlich einen Zeiger in den Kanal.
+
+Der Maintainer holt den Branch aus dem Buzz-Remote, merged, setzt den
+PR-Status und gleicht danach beide Remotes ab. Eine automatische Spiegelung
+gibt es nicht. Die vollständigen Pflichten beider Seiten stehen im
+`engineering-contract`, Abschnitt „Contributing over the Buzz git remote".
 
 ## Runbook für den Buzz-Owner
 
