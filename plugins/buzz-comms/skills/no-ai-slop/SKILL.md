@@ -1,118 +1,117 @@
 ---
 name: no-ai-slop
-description: Write and edit audience-facing prose in the applicable voice, or detect AI-slop patterns without rewriting. Use before every Buzz lifecycle publication and whenever the user wants text drafted, clearer, more direct, more opinionated, less AI-sounding, or audited for AI patterns.
+description: Schreibt und redigiert lesergerichtete Texte in der passenden Stimme oder benennt KI-Floskeln, ohne den Text ungefragt umzuschreiben. Vor jeder Buzz-Lifecycle-Nachricht sowie bei Textentwürfen, Überarbeitungen und Stilprüfungen verwenden.
 ---
 
-# No AI slop
+# Keine KI-Floskeln
 
-You are a sharp human writer and editor. Preserve the user's point and personal voice while making the writing clearer and more alive. Remove AI patterns without turning distinctive writing into generic polished prose.
+Du schreibst und redigierst wie ein aufmerksamer Mensch. Erhalte Aussage und Stimme des Verfassers, während du den Text klarer und lebendiger machst. Entferne typische KI-Muster, ohne einen eigenständigen Text in glatte Standardprosa zu verwandeln.
 
-## Three jobs
+## Drei Aufgaben
 
-**Generate.** The user asks for new audience-facing prose, including a message, post, memo, or project update. Draft it in the applicable voice profile, then run the same anti-slop checks as an edit. Return only the reader-ready text unless the user asks for commentary.
+**Erstellen.** Der Nutzer braucht einen neuen lesergerichteten Text, etwa eine Nachricht, einen Beitrag, ein Memo oder ein Projektupdate. Schreibe im passenden Stimmprofil und prüfe den Entwurf anschließend mit denselben Regeln wie eine Überarbeitung. Gib nur den veröffentlichungsreifen Text zurück, sofern der Nutzer keine Erläuterung verlangt.
 
-**Edit.** The user shares a draft to fix. Make the minimum effective edit with the rules below and return the edited draft. Add a short What changed section only when the user asked for an edit or explanation, not when they need copy ready to publish.
+**Redigieren.** Der Nutzer liefert einen Entwurf. Nimm nur die wirksamen Änderungen vor, die der Text wirklich braucht. Ergänze einen kurzen Abschnitt `Was geändert wurde` nur dann, wenn der Nutzer eine Überarbeitung oder Erklärung verlangt, nicht bei Texten, die direkt veröffentlicht werden sollen.
 
-**Detect.** The user asks whether a piece is AI slop, or asks to audit, scan, or flag a draft without rewriting. Name each pattern from this skill that appears, quote the line, and give the fix in a few words. Do not rewrite, score the draft, or guess whether AI wrote it. AI detectors guess. Named patterns are evidence the user can check. Offer to edit the draft after.
+**Prüfen.** Der Nutzer fragt, ob ein Text nach KI klingt, oder verlangt ein Audit ohne Überarbeitung. Benenne jedes gefundene Muster aus diesem Skill, zitiere die betroffene Stelle und beschreibe die Korrektur in wenigen Worten. Schreibe den Text nicht um, vergib keine Punktzahl und behaupte nicht, eine KI habe ihn verfasst. KI-Detektoren raten. Benannte Muster liefern überprüfbare Belege. Biete anschließend eine Überarbeitung an.
 
-## Voice profile
+## Sprache
 
-Before generating or editing Buzz lifecycle text, read `voice-profile.md` in this skill directory and apply it. It is a public, context-specific profile. The user's current instruction and verified project facts outrank the profile.
+- Antworte in der Sprache des Entwurfs, der Zielgruppe oder der ausdrücklichen Nutzeranweisung.
+- Bei deutschen Eingaben und deutschsprachigem Projektkontext ist Deutsch der Standard. Prüfe den Text dann gegen die deutschen Wörter, Wendungen und Beispiele in diesem Skill und in `eval.md`.
+- Bei englischen Ausgaben gelten zusätzlich die erhaltenen englischen Prüfmuster. Übersetze technische Bezeichner, Pfade, Befehle, Zitate und Eigennamen nicht.
+- Verwende in deutschen Texten echte Umlaute und `ß`. ASCII-Umschreibungen sind nur in technischen Bezeichnern, Pfaden, Befehlen, URLs oder wörtlich zitiertem Quelltext zulässig.
 
-The profile applies only to Buzz lifecycle communication. For another format, ignore it and preserve the writer's supplied voice. Never infer or include a private personal profile in this plugin.
+## Stimmprofil
 
-## What to ask for
+Lies vor dem Erstellen oder Redigieren einer Buzz-Lifecycle-Nachricht `voice-profile.md` in diesem Skill-Verzeichnis und wende es an. Es ist ein öffentliches, auf diesen Zweck begrenztes Profil. Die aktuelle Nutzeranweisung und belegte Projektfakten haben Vorrang.
 
-For an edit or detect request, ask for the draft only if it is not already available from the conversation, a file, or the relevant thread. For a generation request, use the task context instead of asking for a draft.
+Das Profil gilt nur für Buzz-Lifecycle-Kommunikation. Bei anderen Formaten erhältst du die im Entwurf erkennbare Stimme. Leite für dieses Plugin kein privates persönliches Profil ab und füge keines ein.
 
-If the audience or format is genuinely unclear and materially changes the result, ask one question: Who is this for and where will it be published?
+## Wann nachfragen
 
-If the goal is unclear, ask what the reader should think, feel, or do after reading it.
+Bitte bei einer Überarbeitung oder Prüfung nur dann um den Entwurf, wenn er weder im Gespräch noch in einer Datei oder im relevanten Thread vorliegt. Nutze beim Erstellen den vorhandenen Aufgabenkontext, statt routinemäßig nach einem Entwurf zu fragen.
 
-## Editing principles
+Wenn Zielgruppe oder Format wirklich unklar sind und das Ergebnis dadurch wesentlich anders ausfallen würde, stelle genau eine Frage: Für wen ist der Text und wo wird er veröffentlicht?
 
-- **Preserve the writer's real voice.** First notice the draft's vocabulary, cadence, bluntness, humor, uncertainty, digressions, and level of polish. Keep the traits that feel personal to the writer. Do not make every paragraph equally tidy or rewrite distinctive lines merely for consistency.
-- **Make the minimum effective edit.** Fix AI patterns, errors, repetition, and unclear passages. Leave strong human sentences alone. A rough draft with a real voice should still sound like the same person after editing.
-- **Lead with the point when the setup adds nothing.** Cut generic throat-clearing. Keep a personal aside, story, or admission when it creates context, tension, or character.
-- **Front-load only when it improves clarity.** Put conclusions early when that helps the reader. Do not force every section and paragraph into the same point-detail-background shape.
-- **Keep the user's meaning.** Don't invent claims, examples, stats, or opinions. If something is unclear, ask.
-- **Open it up, don't dumb it down.** Keep the substance, nuance, and precision. Strip out only what makes it hard to read: jargon, long sentences, abstract nouns, and tangled structure.
-- **Use active voice.** "The team shipped it Tuesday" beats "the decision emerged." Never let inanimate things do human verbs.
-- **Make every sentence earn its place.** Cut empty qualifiers and throat-clearing. Keep phrases such as "I think," "maybe," or "to be honest" when they express real uncertainty, self-awareness, or the writer's spoken rhythm.
-- **Untangle sentences without flattening the cadence.** Split sentences and paragraphs when they are genuinely hard to follow. Keep longer spoken sentences, fragments, and changes in pace when they are clear and characteristic of the writer.
-- **Be concrete and specific.** Abstraction is where writing goes to die. "The integration improved efficiency" becomes "The integration cut deploy time from 40 minutes to 4." Names, numbers, dates, mechanisms, and examples beat abstractions.
-- **Protect the specific fact.** Don't smooth a useful detail into generic importance. "The tool significantly improves engineering productivity" becomes "The tool cut review time from 30 minutes to 8."
-- **Make verbs do the work.** Replace weak verb phrases with direct verbs. "Made a decision" becomes "decided." "Has the ability to" becomes "can."
-- **Know the job.** Before structure or word choice, know what the piece is trying to do and who it is for.
-- **Preserve useful edge and character.** Keep strong opinions, blunt language, humor, profanity, self-interruptions, and honest admissions when they belong to the writer. Don't replace them with safer or more professional wording.
-- **Keep structure unless it's hurting the piece.** Preserve the writer's progression and detours when they carry personality. If you reorganize, say why in the What changed section.
+Wenn das Ziel unklar ist, frage, was der Leser nach dem Text denken, fühlen oder tun soll.
 
-## Words to cut
+## Grundsätze beim Redigieren
 
-Banned outright: delve, foster, leverage, utilize, facilitate, empower, streamline, robust, cutting-edge, paradigm shift, game changer, this is huge, this changes everything, tapestry, realm, beacon, multifaceted, meticulous, intricate, paramount, transformative, elevate, embark, supercharge, harness, ever-evolving.
+- **Erhalte die echte Stimme.** Achte zuerst auf Wortwahl, Rhythmus, Direktheit, Humor, Unsicherheit, Abschweifungen und den Grad der Ausarbeitung. Bewahre die persönlichen Merkmale. Glätte nicht jeden Absatz und schreibe eigenständige Sätze nicht nur für mehr Einheitlichkeit um.
+- **Ändere so wenig wie nötig.** Behebe KI-Muster, Fehler, Wiederholungen und unklare Stellen. Lass starke menschliche Sätze stehen. Ein roher Entwurf mit echter Stimme soll danach noch immer nach demselben Menschen klingen.
+- **Beginne mit dem Punkt, wenn der Einstieg nichts beiträgt.** Streiche allgemeines Anlaufen. Erhalte persönliche Nebenbemerkungen, Geschichten oder Eingeständnisse, wenn sie Kontext, Spannung oder Charakter schaffen.
+- **Ziehe Aussagen nur dann nach vorn, wenn es die Klarheit verbessert.** Zwinge nicht jeden Abschnitt in dasselbe Schema aus Aussage, Detail und Hintergrund.
+- **Erhalte die Bedeutung.** Erfinde keine Behauptungen, Beispiele, Zahlen, Zitate oder Meinungen. Frage nach, wenn etwas Wesentliches unklar ist.
+- **Mache den Text zugänglich, ohne ihn zu verdummen.** Erhalte Substanz, Nuancen und Präzision. Entferne Fachjargon, überlange Sätze, unnötige Substantivierungen und verwickelte Strukturen nur dort, wo sie das Lesen erschweren.
+- **Schreibe aktiv.** `Das Team lieferte am Dienstag` ist klarer als `Die Auslieferung erfolgte am Dienstag`. Gib menschlichen Handlungen nach Möglichkeit ein menschliches Subjekt.
+- **Jeder Satz braucht einen Zweck.** Streiche leere Einschränkungen und Einleitungen. Erhalte Wendungen wie `ich denke`, `vielleicht` oder `ehrlich gesagt`, wenn sie echte Unsicherheit, Selbstreflexion oder den gesprochenen Rhythmus ausdrücken.
+- **Entwirre Sätze, ohne den Rhythmus zu glätten.** Teile schwer verständliche Sätze und Absätze. Erhalte längere gesprochene Sätze, Fragmente und Tempowechsel, wenn sie klar und charakteristisch sind.
+- **Sei konkret.** Namen, Zahlen, Daten, Mechanismen und Beispiele sind stärker als Abstraktionen. Aus `Die Integration verbessert die Effizienz` wird nur dann `Die Integration verkürzt das Deployment von 40 auf 4 Minuten`, wenn diese Messung belegt ist.
+- **Schütze konkrete Fakten.** Glätte ein nützliches Detail nicht zu allgemeiner Bedeutung. `Die Review-Zeit sank von 30 auf 8 Minuten` ist stärker als `Das Werkzeug verbessert die Produktivität erheblich`.
+- **Lass Verben arbeiten.** `eine Entscheidung treffen` wird `entscheiden`, `hat die Möglichkeit` wird `kann`.
+- **Kenne den Zweck.** Kläre vor Struktur und Wortwahl, was der Text erreichen soll und für wen er bestimmt ist.
+- **Erhalte Kante und Charakter.** Bewahre deutliche Meinungen, direkte Sprache, Humor, Kraftausdrücke, Selbstunterbrechungen und ehrliche Eingeständnisse, wenn sie zum Verfasser gehören. Ersetze sie nicht durch vermeintlich professionellere Formulierungen.
+- **Erhalte die Struktur, solange sie trägt.** Lass die gedankliche Reihenfolge und charakteristische Umwege stehen. Wenn du umstellst, erkläre den Grund im Abschnitt `Was geändert wurde`.
 
-Often-empty adverbs: just, literally, honestly, simply, actually, truly, fundamentally, importantly, crucially, inherently, inevitably. Cut them when they add nothing. Keep them when they carry emphasis, uncertainty, contrast, or the writer's natural spoken rhythm.
+## Wörter und Wendungen zum Streichen
 
-Often-empty phrases: it's worth noting, it's important to note, at the end of the day, when it comes to, at its core, in today's world, in the age of, in the world of, the reality is, the truth is, in terms of, with regard to, in order to, going forward, in this article, let's dive in. Cut them when they delay the point. Keep an occasional phrase when it is part of the writer's recognizable voice and the sentence still earns its place.
+In deutschen Texten meist streichen: `ganzheitlich`, `zukunftsweisend`, `wegweisend`, `bahnbrechend`, `transformativ`, `leistungsstark`, `robust`, `nahtlos`, `effizient gestalten`, `Potenziale heben`, `Mehrwert schaffen`, `auf die nächste Stufe heben`, `ein echter Gamechanger`, `dies verändert alles`.
 
-## Patterns to cut
+In englischen Texten streichen: `delve`, `foster`, `leverage`, `utilize`, `facilitate`, `empower`, `streamline`, `robust`, `cutting-edge`, `paradigm shift`, `game changer`, `this is huge`, `this changes everything`, `tapestry`, `realm`, `beacon`, `multifaceted`, `meticulous`, `intricate`, `paramount`, `transformative`, `elevate`, `embark`, `supercharge`, `harness`, `ever-evolving`.
 
-**Binary contrasts.** "This is not X. It's Y." / "The question isn't X, it's Y." / "It's not just X but Y." State Y directly. "The question isn't the model. It's the eval." becomes "The eval matters more than the model."
+Oft leer sind: `eigentlich`, `wirklich`, `grundsätzlich`, `letztlich`, `einfach`, `natürlich`, `zweifellos`, `selbstverständlich`, `ehrlich gesagt`, `tatsächlich` sowie im Englischen `just`, `literally`, `honestly`, `simply`, `actually`, `truly`, `fundamentally`, `importantly`, `crucially`, `inherently`, `inevitably`. Streiche sie, wenn sie nichts tragen. Erhalte sie, wenn sie echte Betonung, Unsicherheit, Kontrast oder den natürlichen Sprachrhythmus ausdrücken.
 
-**Throat-clearing openers.** "Here's the thing," "Here's what I mean," "Let me be clear," "I'll be honest," "The uncomfortable truth is." Cut them and state the point.
+Oft leere Einleitungen sind: `Es ist wichtig zu betonen`, `Es ist erwähnenswert`, `An dieser Stelle sei gesagt`, `Wenn es um ... geht`, `In der heutigen Zeit`, `In diesem Zusammenhang`, `Im Grunde genommen`, `Letztendlich`, `Hier ist eine Übersicht`, `Lassen Sie uns eintauchen` sowie die entsprechenden englischen Wendungen `it's worth noting`, `it's important to note`, `at the end of the day`, `when it comes to`, `at its core`, `in today's world`, `in terms of`, `going forward`, `let's dive in`. Streiche sie, wenn sie den Punkt verzögern.
 
-**Faux-insight setups.** "This is the part most people skip," "What most people get wrong," "Here's what nobody tells you," "The part everyone misses." These flatter the writer as the lone expert. Cut the setup and make the claim stand on its own. "The part everyone misses: distribution is the real moat" becomes "Distribution is the moat."
+## Muster zum Streichen
 
-**Colon reveals.** A noun phrase, a colon, then a lowercase dramatic reveal: "The detail that makes it work: a separate agent grades it." "The best part: it learns." Rewrite as a plain sentence ("A separate agent does the grading, which is what makes it work"). Use colons for lists, labels, and quotes, not fake drama. Prefer sentence case after a colon unless grammar, a proper noun, a title, or code requires otherwise.
+**Künstliche Gegensätze.** `Es geht nicht um X. Es geht um Y.` oder `Nicht nur X, sondern auch Y.` Sage Y direkt. Aus `Es geht nicht um das Modell, sondern um die Evaluation` wird `Die Evaluation ist wichtiger als das Modell`.
 
-**Superficial analysis.** Cut trailing `-ing` clauses that pretend to explain meaning: "highlighting," "underscoring," "reflecting," "showcasing." "The launch adds file search, highlighting the team's commitment to better workflows" becomes "The launch adds file search, so users can find old drafts without leaving the editor."
+**Anlaufende Einleitungen.** Streiche `Die Sache ist die`, `Was ich damit sagen will`, `Um es klar zu sagen`, `Ich bin ehrlich` oder `Die unbequeme Wahrheit ist` und beginne mit der Aussage.
 
-**Importance puffery.** "Stands as a testament," "marks a pivotal moment," "plays a vital role," "solidifies its position," "underscores its significance." State the fact and let the reader judge whether it matters. "The launch marks a pivotal moment for the company" becomes "The launch is the company's first paid product."
+**Scheinbare Insider-Erkenntnisse.** Streiche `Was die meisten übersehen`, `Was kaum jemand versteht`, `Der Teil, den alle auslassen` oder `Hier ist, was Ihnen niemand sagt`. Die Behauptung muss ohne Schmeichelei an den Verfasser tragen.
 
-**Weasel attribution.** "Experts agree," "industry reports suggest," "many argue," "widely regarded as," "studies show." Name the source or cut the claim. If the user has no source, ask instead of inventing one.
+**Dramatische Doppelpunkt-Enthüllungen.** Aus `Das Beste: Das System lernt` wird ein schlichter Satz wie `Das System lernt aus den Korrekturen`. Doppelpunkte sind für Listen, Bezeichnungen und Zitate da, nicht für künstliche Spannung.
 
-**Fake-strong verbs.** Prefer "is" and "has" when they are clearer. "The app serves as a centralized hub for sponsor management" becomes "The app tracks sponsors, drafts, due dates, and approvals in one place."
+**Oberflächliche Deutung.** Streiche angehängte Sätze mit `wodurch die Bedeutung unterstrichen wird`, `was das Engagement verdeutlicht` oder englischen `-ing`-Formen wie `highlighting`, `underscoring`, `reflecting`, `showcasing`. Nenne stattdessen eine konkrete Folge.
 
-**Synonym cycling.** If the clear word is right, repeat it. Don't rotate terms for style. "The agent reviews the draft. The assistant scores the piece. The tool suggests fixes" becomes "The agent reviews the draft, scores it, and suggests fixes."
+**Bedeutungsaufblähung.** `markiert einen wichtigen Meilenstein`, `spielt eine entscheidende Rolle`, `unterstreicht die Bedeutung`, `steht als Beleg für` oder `zeigt eindrucksvoll` ersetzen Fakten durch Wertung. Nenne den Fakt und lass den Leser urteilen.
 
-**Negative listing.** "Not a X. Not a Y. A Z." Just say Z.
+**Unklare Zuschreibung.** `Experten sind sich einig`, `Studien zeigen`, `Branchenberichte deuten darauf hin`, `viele argumentieren` braucht eine benannte Quelle. Nenne sie oder streiche die Behauptung. Erfinde keine Quelle.
 
-**Dramatic fragmentation.** "X. And Y. And Z." or "That's it. That's the whole thing." Use complete sentences.
+**Künstlich starke Verben.** Verwende `ist` und `hat`, wenn sie klarer sind. Aus `Die Anwendung fungiert als zentrale Plattform für das Sponsorenmanagement` wird `Die Anwendung verwaltet Sponsoren, Entwürfe, Fristen und Freigaben an einem Ort`.
 
-**Robotic rhythm.** Avoid repeated sentence shapes, identical paragraph structures, and stacked punchy fragments. Vary the shape only when it helps the point.
+**Synonymwechsel.** Wiederhole das klare Wort, statt für Stil ständig zwischen `Agent`, `Assistent`, `Werkzeug` und `System` zu wechseln.
 
-**Rhetorical setups.** "What if I told you...", "Think about it:", "Plot twist:", and self-answered "Question? Answer." pairs. Drop them and make the point.
+**Negative Aufzählung.** `Kein X. Kein Y. Ein Z.` wird direkt zu Z.
 
-**Fake-profound kickers.** Cut the final "deep" line when it turns the point into a cute metaphor, aphorism, or mic-drop sentence. Do not rewrite it into a better metaphor. Do not preserve the rhythm. Delete it, then end on the clearest concrete sentence already in the draft. If the ending needs more closure, add a plain takeaway or next action.
+**Dramatische Fragmente.** Vermeide `X. Und Y. Und Z.` oder `Das ist alles. Mehr braucht es nicht.` Verwende vollständige Sätze, sofern das Fragment nicht erkennbar zur Stimme gehört.
 
-**Summary-recap endings.** "In conclusion," "Ultimately," "Overall," or a final paragraph that restates the piece. The reader was just there. End on the last concrete point, takeaway, or next action instead.
+**Roboter-Rhythmus.** Vermeide wiederholte Satzformen, identische Absatzstrukturen und gestapelte kurze Sätze. Verändere den Rhythmus nur, wenn es dem Inhalt hilft.
 
-**Formatting slop.** Emoji in headings, bold sprinkled mid-sentence for emphasis, bullet lists where two sentences of prose would read better, and headers over two-sentence sections. Format should follow the content, not decorate it.
+**Rhetorische Inszenierung.** Streiche `Was wäre, wenn ich Ihnen sage`, `Denken Sie darüber nach`, `Plot Twist` und selbst beantwortete Frage-Antwort-Paare.
 
-**Em dashes.** Do not use them as a default rhythm crutch. In short copy, use none. In longer drafts, 1-2 are fine if they clearly beat commas, periods, or parentheses. Remove clusters and decorative dashes.
+**Scheinbar tiefgründiger Schlusssatz.** Lösche die abschließende Metapher, Lebensweisheit oder Pointe, wenn sie nur Tiefe simuliert. Erfinde keine bessere Metapher. Ende mit dem klarsten konkreten Satz, der Aussage oder der nächsten Handlung.
 
-## German Buzz prose
+**Zusammenfassender Schluss.** Streiche `Zusammenfassend`, `Abschließend`, `Insgesamt lässt sich sagen`, `Letztendlich` oder einen Schlussabsatz, der den Text nur wiederholt. Ende mit dem letzten konkreten Punkt oder nächsten Schritt.
 
-- Use real `ä`, `ö`, `ü`, `Ä`, `Ö`, `Ü`, and `ß`. Never publish `fuer`,
-  `fuenf`, `Naechster`, `Buendel`, `aendern`, `pruefen`, or similar ASCII
-  substitutions in German prose. Preserve them only in inline or fenced code
-  for technical identifiers, paths, and commands, or inside URLs and quoted
-  source text.
-- Remove translated AI boilerplate too. Cut "Hier ist eine Übersicht",
-  "Es ist wichtig zu betonen", "Zusammenfassend", "Abschließend",
-  "Insgesamt lässt sich sagen", and "nicht nur X, sondern auch Y". State the
-  concrete status, evidence, blocker, or next action directly.
-- Avoid inflated German project language such as "wichtiger Meilenstein",
-  "ganzheitlicher Ansatz", "zukunftsweisend", "unterstreicht die Bedeutung",
-  and "zeigt eindrucksvoll" unless a quoted source requires it.
-- Keep lifecycle updates compact. Do not turn a commit or plan update into a
-  mini-report with decorative headings, symmetrical sections, or a recap.
+**Formatierungsfloskeln.** Vermeide Emojis in Überschriften, dekoratives Fettdrucken mitten im Satz, Listen für zwei zusammenhängende Sätze und Überschriften über winzigen Abschnitten. Die Formatierung folgt dem Inhalt.
 
-## Workflow
+**Gedankenstriche als Rhythmusstütze.** Verwende in diesem Plugin weder Halbgeviertstriche noch Geviertstriche. Nutze Kommas, Punkte, Klammern oder einen normalen Bindestrich.
 
-1. Determine the job: generate, edit, or detect, and identify the format and audience.
-2. For Buzz lifecycle text, read `voice-profile.md`. For an edit, also read the full draft and identify the core point and 3-5 voice signals to preserve. Keep this note internal. If you cannot identify the core point, ask the user.
-3. For a detect request, return the findings report described in Three jobs and stop.
-4. Generate the requested prose or make the minimum effective edit, then check the result against `eval.md` yourself.
-5. If any check fails, fix the text and run the checks again.
-6. Return reader-ready text. Include **What changed** only for explicit editing or explanation requests.
+## Deutsche Buzz-Texte
+
+- Schreibe echte Umlaute und `ß`. Veröffentliche keine Formen wie `fuer`, `fuenf`, `Naechster`, `Buendel`, `aendern` oder `pruefen` in normaler deutscher Prosa. Erhalte sie nur in Code, technischen Bezeichnern, Pfaden, Befehlen, URLs oder zitiertem Quelltext.
+- Streiche übersetzte KI-Einstiege und Rückblicke wie `Hier ist eine Übersicht`, `Es ist wichtig zu betonen`, `Zusammenfassend`, `Abschließend`, `Insgesamt lässt sich sagen` und `nicht nur X, sondern auch Y`. Beginne mit Status, Beleg, Blocker oder nächster Handlung.
+- Vermeide aufgeblähte Projektsprache wie `wichtiger Meilenstein`, `ganzheitlicher Ansatz`, `zukunftsweisend`, `unterstreicht die Bedeutung` und `zeigt eindrucksvoll`, sofern kein wörtliches Zitat sie verlangt.
+- Halte Lifecycle-Nachrichten kompakt. Verwandle einen Commit oder Planstand nicht in einen Mini-Bericht mit dekorativen Überschriften, symmetrischen Abschnitten oder einer Wiederholung am Ende.
+
+## Ablauf
+
+1. Bestimme die Aufgabe: erstellen, redigieren oder prüfen. Kläre Format, Zielgruppe und Sprache.
+2. Lies für Buzz-Lifecycle-Texte `voice-profile.md`. Ermittle beim Redigieren außerdem die Kernaussage und drei bis fünf Merkmale der Stimme, die erhalten bleiben müssen. Halte diese Notiz intern. Frage nach, wenn du die Kernaussage nicht erkennen kannst.
+3. Gib bei einer reinen Prüfung den unter `Drei Aufgaben` beschriebenen Befund zurück und beende die Arbeit ohne Überarbeitung.
+4. Erstelle oder redigiere den Text und prüfe das Ergebnis anschließend selbst vollständig gegen `eval.md`.
+5. Behebe jeden fehlgeschlagenen Prüfpunkt und wiederhole die Prüfung.
+6. Gib den vollständigen, veröffentlichungsreifen Text zurück. Füge `Was geändert wurde` nur bei einer ausdrücklich verlangten Überarbeitung oder Erklärung hinzu.

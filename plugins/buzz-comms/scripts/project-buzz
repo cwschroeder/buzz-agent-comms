@@ -14,16 +14,22 @@ Two things differ on purpose:
 * Identity, relay and project mapping come from ``~/.config/buzz-agent``
   instead of the owner's pilot checkout.
 
-Signing always happens inside the ``buzz`` CLI. This script never implements
-crypto and never prints private key material.
+Event signing happens inside the ``buzz`` CLI. The one exception is
+provisioning: the helper generates the agent key pair and the NIP-OA owner
+attestation itself, so a colleague needs no extra binaries for their platform.
+That code is confined to the "NIP-OA key material" section and is covered by
+the published BIP-340 vectors. Private key material is never printed, not even
+on error.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import stat
 import subprocess
@@ -37,8 +43,20 @@ EVENT_ID_RE = re.compile(r"^[0-9a-f]{64}$")
 REPO_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,62}$")
 PUBKEY_RE = re.compile(r"^[0-9a-f]{64}$")
 
+# Lifecycle markers as published by this helper and the owner pilot:
+#   [AGENT-ACTIVITY:started:<agent>:<id>]
+#   [AGENT-ACTIVITY:progress|blocked|correction:<agent>:<id>]
+#   [AGENT-RESULT:<agent>:<id>]
+# A correction is a closing phase like result and blocked: it supersedes an
+# earlier update, so it is never itself an open thread.
+MARKER_RE = re.compile(
+    r"\[AGENT-(?:ACTIVITY:(started|progress|blocked|correction)|RESULT):"
+    r"([a-z0-9][a-z0-9._-]{0,31}):([A-Za-z0-9][A-Za-z0-9._-]{0,63})\]"
+)
+CLOSING_PHASES = ("result", "blocked", "correction")
+
 MAX_CONTENT = 4000
-HELPER_VERSION = "0.5.1"
+HELPER_VERSION = "0.15.0"
 FORBIDDEN_IN_CONTENT = ("[PILOT-", "[AGENT-")
 LIFECYCLE_PHASES = ("start", "progress", "blocked", "result")
 GERMAN_ASCII_SUBSTITUTION_RE = re.compile(
@@ -53,6 +71,38 @@ GERMAN_ASCII_SUBSTITUTION_RE = re.compile(
     r")(?!\w)",
     re.IGNORECASE,
 )
+
+# Deterministic guards that run before anything is published. Secrets have no
+# legitimate place in a project update, so the helper rejects common credential
+# shapes outright. The check is a safety net, not an exhaustive detector: the
+# no-ai-slop edit runs first and operators review what reaches the channel.
+SECRET_PATTERNS = (
+    ("nostr-secret-key", re.compile(r"nsec1[02-9ac-hj-np-z]{50,}")),
+    ("openai-style-key", re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_\-]{16,}")),
+    ("github-token", re.compile(r"\b(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{16,}")),
+    ("slack-token", re.compile(r"\bxox[baprs]-[A-Za-z0-9\-]{8,}")),
+    ("aws-access-key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
+    ("bearer-token", re.compile(r"\bBearer\s+[A-Za-z0-9._\-~+/]{16,}", re.IGNORECASE)),
+    (
+        "key-assignment",
+        re.compile(
+            r"\b(?:api[_-]?key|private[_-]?key|access[_-]?token|password|secret|"
+            r"auth[_-]?tag)\b\s*[\"']?\s*[:=]\s*[\"']?[A-Za-z0-9+/._\-]{16,}"
+        ),
+    ),
+)
+
+# A hung CLI must not hang the agent. Override via environment so tests can
+# exercise the timeout without waiting for the real default.
+CLI_TIMEOUT_DEFAULT = 60
+
+
+def cli_timeout() -> int:
+    raw = os.environ.get("BUZZ_AGENT_CLI_TIMEOUT_SECONDS", "").strip()
+    if raw and raw.isdigit():
+        return int(raw)
+    return CLI_TIMEOUT_DEFAULT
+
 
 # A relay that requires membership answers 403 with this error code, and the
 # buzz CLI passes it through. The agent key carries no membership of its own:
@@ -245,6 +295,364 @@ def resolve_binary(config: Dict[str, Any], key: str, default: str) -> str:
 
 
 # --------------------------------------------------------------------------
+# NIP-OA key material
+# --------------------------------------------------------------------------
+#
+# Provision needs two things the buzz CLI does not offer: a fresh secp256k1
+# key pair for the agent, and the NIP-OA owner attestation over it. Both are
+# small, fully specified operations, so the helper does them itself instead of
+# asking every colleague to obtain buzz-admin and compute_auth_tag for their
+# platform. The owner secret is parsed, used and dropped inside this process;
+# it never reaches a command line, an environment of a child process, or disk.
+#
+# The signing preimage is the protocol contract with the relay:
+#
+#     preimage = "nostr:agent-auth:" + agent_pubkey_hex + ":" + conditions
+#     message  = SHA256(preimage)
+#     sig      = BIP-340 Schnorr(message, owner_secret)
+#     tag      = ["auth", owner_pubkey_hex, conditions, sig_hex]
+#
+# Every signature is verified before it leaves this module, and the official
+# BIP-340 vectors plus a tag produced by the Rust reference guard the suite.
+
+# secp256k1 domain parameters, SEC 2 section 2.4.1.
+_FIELD = 2 ** 256 - 2 ** 32 - 977
+_ORDER = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+_GENERATOR = (
+    0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798,
+    0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8,
+)
+
+# Jacobian coordinates keep one modular inversion per scalar multiplication
+# instead of one per step. The point at infinity is any triple with z == 0.
+_INFINITY = (0, 0, 0)
+
+
+def _double(point: Tuple[int, int, int]) -> Tuple[int, int, int]:
+    x, y, z = point
+    if y == 0 or z == 0:
+        return _INFINITY
+    ysq = (y * y) % _FIELD
+    s = (4 * x * ysq) % _FIELD
+    m = (3 * x * x) % _FIELD
+    nx = (m * m - 2 * s) % _FIELD
+    ny = (m * (s - nx) - 8 * ysq * ysq) % _FIELD
+    nz = (2 * y * z) % _FIELD
+    return (nx, ny, nz)
+
+
+def _add(
+    left: Tuple[int, int, int], right: Tuple[int, int, int]
+) -> Tuple[int, int, int]:
+    if left[2] == 0:
+        return right
+    if right[2] == 0:
+        return left
+    x1, y1, z1 = left
+    x2, y2, z2 = right
+    z1sq = (z1 * z1) % _FIELD
+    z2sq = (z2 * z2) % _FIELD
+    u1 = (x1 * z2sq) % _FIELD
+    u2 = (x2 * z1sq) % _FIELD
+    s1 = (y1 * z2sq * z2) % _FIELD
+    s2 = (y2 * z1sq * z1) % _FIELD
+    if u1 == u2:
+        # Same x: either the same point (double it) or P + (-P) (infinity).
+        return _double(left) if s1 == s2 else _INFINITY
+    h = (u2 - u1) % _FIELD
+    r = (s2 - s1) % _FIELD
+    hsq = (h * h) % _FIELD
+    hcu = (h * hsq) % _FIELD
+    u1hsq = (u1 * hsq) % _FIELD
+    nx = (r * r - hcu - 2 * u1hsq) % _FIELD
+    ny = (r * (u1hsq - nx) - s1 * hcu) % _FIELD
+    nz = (h * z1 * z2) % _FIELD
+    return (nx, ny, nz)
+
+
+def _multiply(point: Tuple[int, int, int], scalar: int) -> Tuple[int, int, int]:
+    result = _INFINITY
+    addend = point
+    while scalar > 0:
+        if scalar & 1:
+            result = _add(result, addend)
+        addend = _double(addend)
+        scalar >>= 1
+    return result
+
+
+def _affine(point: Tuple[int, int, int]) -> Optional[Tuple[int, int]]:
+    x, y, z = point
+    if z == 0:
+        return None
+    zinv = pow(z, _FIELD - 2, _FIELD)
+    zinv_sq = (zinv * zinv) % _FIELD
+    return ((x * zinv_sq) % _FIELD, (y * zinv_sq % _FIELD * zinv) % _FIELD)
+
+
+def _generator_multiple(scalar: int) -> Tuple[int, int]:
+    point = _affine(_multiply((_GENERATOR[0], _GENERATOR[1], 1), scalar))
+    if point is None:
+        raise UserError("scalar multiple of the generator is the point at infinity")
+    return point
+
+
+def _lift_x(x_bytes: bytes) -> Optional[Tuple[int, int]]:
+    """Recover the even-y curve point for an x-only public key, per BIP-340."""
+    x = int.from_bytes(x_bytes, "big")
+    if x >= _FIELD:
+        return None
+    y_squared = (pow(x, 3, _FIELD) + 7) % _FIELD
+    y = pow(y_squared, (_FIELD + 1) // 4, _FIELD)
+    if pow(y, 2, _FIELD) != y_squared:
+        return None
+    return (x, y if y % 2 == 0 else _FIELD - y)
+
+
+def _tagged_hash(tag: str, payload: bytes) -> bytes:
+    digest = hashlib.sha256(tag.encode("ascii")).digest()
+    return hashlib.sha256(digest + digest + payload).digest()
+
+
+def x_only_public_key(secret: int) -> bytes:
+    """The 32 byte x-only public key for a secret scalar."""
+    if not 1 <= secret <= _ORDER - 1:
+        raise UserError("private key is out of range for secp256k1")
+    return _generator_multiple(secret)[0].to_bytes(32, "big")
+
+
+def schnorr_verify(message: bytes, public_key: bytes, signature: bytes) -> bool:
+    """Verify a BIP-340 signature. Returns False for any malformed input."""
+    if len(public_key) != 32 or len(signature) != 64:
+        return False
+    point = _lift_x(public_key)
+    if point is None:
+        return False
+    r = int.from_bytes(signature[:32], "big")
+    s = int.from_bytes(signature[32:], "big")
+    if r >= _FIELD or s >= _ORDER:
+        return False
+    challenge = (
+        int.from_bytes(
+            _tagged_hash("BIP0340/challenge", signature[:32] + public_key + message),
+            "big",
+        )
+        % _ORDER
+    )
+    # R = s*G - e*P, accepted only when R is not infinity, has even y and x == r.
+    computed = _add(
+        _multiply((_GENERATOR[0], _GENERATOR[1], 1), s),
+        _multiply((point[0], point[1], 1), _ORDER - challenge),
+    )
+    resolved = _affine(computed)
+    if resolved is None or resolved[1] % 2 != 0:
+        return False
+    return resolved[0] == r
+
+
+def schnorr_sign(
+    message: bytes, secret: int, aux_rand: Optional[bytes] = None
+) -> bytes:
+    """Sign a message with BIP-340 Schnorr.
+
+    ``aux_rand`` exists so the published test vectors can be reproduced; real
+    calls leave it unset and draw fresh randomness.
+    """
+    if not 1 <= secret <= _ORDER - 1:
+        raise UserError("private key is out of range for secp256k1")
+    if aux_rand is None:
+        aux_rand = secrets.token_bytes(32)
+    if len(aux_rand) != 32:
+        raise UserError("auxiliary randomness must be 32 bytes")
+
+    point = _generator_multiple(secret)
+    scalar = secret if point[1] % 2 == 0 else _ORDER - secret
+    public_bytes = point[0].to_bytes(32, "big")
+
+    masked = scalar ^ int.from_bytes(_tagged_hash("BIP0340/aux", aux_rand), "big")
+    nonce = int.from_bytes(
+        _tagged_hash(
+            "BIP0340/nonce", masked.to_bytes(32, "big") + public_bytes + message
+        ),
+        "big",
+    ) % _ORDER
+    if nonce == 0:
+        raise UserError("nonce generation failed, retry the command")
+
+    nonce_point = _generator_multiple(nonce)
+    if nonce_point[1] % 2 != 0:
+        nonce = _ORDER - nonce
+    nonce_bytes = nonce_point[0].to_bytes(32, "big")
+
+    challenge = (
+        int.from_bytes(
+            _tagged_hash(
+                "BIP0340/challenge", nonce_bytes + public_bytes + message
+            ),
+            "big",
+        )
+        % _ORDER
+    )
+    signature = nonce_bytes + ((nonce + challenge * scalar) % _ORDER).to_bytes(
+        32, "big"
+    )
+    # Self-check, as the BIP-340 reference does: a broken signature must fail
+    # here rather than become an identity the relay silently rejects later.
+    if not schnorr_verify(message, public_bytes, signature):
+        raise UserError("produced signature failed its own verification")
+    return signature
+
+
+def generate_keypair() -> Tuple[str, str]:
+    """A fresh agent key pair as (private key hex, x-only public key hex)."""
+    while True:
+        material = secrets.token_bytes(32)
+        secret = int.from_bytes(material, "big")
+        if 1 <= secret <= _ORDER - 1:
+            return material.hex(), x_only_public_key(secret).hex()
+
+
+_BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+
+
+def _bech32_polymod(values: List[int]) -> int:
+    generator = (0x3B6A57B2, 0x26508E6D, 0x1EA119FA, 0x3D4233DD, 0x2A1462B3)
+    checksum = 1
+    for value in values:
+        top = checksum >> 25
+        checksum = ((checksum & 0x1FFFFFF) << 5) ^ value
+        for index in range(5):
+            checksum ^= generator[index] if (top >> index) & 1 else 0
+    return checksum
+
+
+def _bech32_decode(text: str) -> Tuple[Optional[str], Optional[List[int]]]:
+    """Decode a bech32 string into (hrp, 5 bit data). BIP-173, no bech32m."""
+    if any(ord(character) < 33 or ord(character) > 126 for character in text):
+        return (None, None)
+    if text.lower() != text and text.upper() != text:
+        return (None, None)
+    text = text.lower()
+    position = text.rfind("1")
+    if position < 1 or position + 7 > len(text) or len(text) > 90:
+        return (None, None)
+    if any(character not in _BECH32_CHARSET for character in text[position + 1 :]):
+        return (None, None)
+    hrp = text[:position]
+    data = [_BECH32_CHARSET.find(character) for character in text[position + 1 :]]
+    expanded = [ord(character) >> 5 for character in hrp]
+    expanded += [0]
+    expanded += [ord(character) & 31 for character in hrp]
+    if _bech32_polymod(expanded + data) != 1:
+        return (None, None)
+    return (hrp, data[:-6])
+
+
+def _convert_bits(data: List[int], from_bits: int, to_bits: int) -> Optional[bytes]:
+    accumulator = 0
+    bits = 0
+    result = bytearray()
+    maximum = (1 << to_bits) - 1
+    for value in data:
+        if value < 0 or value >> from_bits:
+            return None
+        accumulator = (accumulator << from_bits) | value
+        bits += from_bits
+        while bits >= to_bits:
+            bits -= to_bits
+            result.append((accumulator >> bits) & maximum)
+    # Trailing bits are padding and must be zero; nsec carries exactly 32 bytes.
+    if bits >= from_bits or ((accumulator << (to_bits - bits)) & maximum):
+        return None
+    return bytes(result)
+
+
+def parse_owner_secret(text: str) -> int:
+    """Parse an owner private key given as 64 hex characters or as ``nsec1...``.
+
+    The input is never echoed back, not even on error: it is the caller's Buzz
+    private key.
+    """
+    candidate = (text or "").strip()
+    if not candidate:
+        raise UserError("No owner private key given.")
+
+    if candidate.lower().startswith("npub1"):
+        raise UserError(
+            "That is a public key (npub). Provision needs your own private key "
+            "(nsec or 64 hex characters); it is used locally to sign the owner "
+            "attestation and is never stored or transmitted."
+        )
+
+    if PUBKEY_RE.match(candidate.lower()):
+        secret = int(candidate, 16)
+    elif candidate.lower().startswith("nsec1"):
+        hrp, data = _bech32_decode(candidate)
+        raw = _convert_bits(data, 5, 8) if data is not None else None
+        if hrp != "nsec" or raw is None or len(raw) != 32:
+            raise UserError(
+                "The nsec key is malformed. Copy it again from Buzz Desktop."
+            )
+        secret = int.from_bytes(raw, "big")
+    else:
+        raise UserError(
+            "Unrecognised owner private key format. Expected 64 hex characters "
+            "or an 'nsec1...' key from Buzz Desktop."
+        )
+
+    if not 1 <= secret <= _ORDER - 1:
+        raise UserError("The owner private key is out of range for secp256k1.")
+    return secret
+
+
+def compute_auth_tag(
+    owner_secret: int, agent_public_key: str, conditions: str = ""
+) -> str:
+    """Build the NIP-OA auth tag JSON attesting ``agent_public_key``."""
+    agent = (agent_public_key or "").lower()
+    if not PUBKEY_RE.match(agent):
+        raise UserError("Agent public key must be 64 lowercase hex characters.")
+    owner_public = x_only_public_key(owner_secret)
+    if owner_public.hex() == agent:
+        raise UserError(
+            "Owner and agent public key are identical; a key cannot attest itself."
+        )
+    preimage = "nostr:agent-auth:{0}:{1}".format(agent, conditions)
+    digest = hashlib.sha256(preimage.encode("utf-8")).digest()
+    signature = schnorr_sign(digest, owner_secret)
+    return json.dumps(
+        ["auth", owner_public.hex(), conditions, signature.hex()],
+        separators=(",", ":"),
+    )
+
+
+def verify_auth_tag(auth_tag_json: str, agent_public_key: str) -> Optional[str]:
+    """Return the attesting owner public key, or None if the tag does not hold."""
+    try:
+        parsed = json.loads(auth_tag_json)
+    except ValueError:
+        return None
+    if not isinstance(parsed, list) or len(parsed) != 4 or parsed[0] != "auth":
+        return None
+    owner, conditions, signature = parsed[1], parsed[2], parsed[3]
+    agent = (agent_public_key or "").lower()
+    if not (
+        isinstance(owner, str)
+        and isinstance(conditions, str)
+        and isinstance(signature, str)
+        and PUBKEY_RE.match(owner)
+        and PUBKEY_RE.match(agent)
+        and re.match(r"^[0-9a-f]{128}$", signature)
+    ):
+        return None
+    preimage = "nostr:agent-auth:{0}:{1}".format(agent, conditions)
+    digest = hashlib.sha256(preimage.encode("utf-8")).digest()
+    if not schnorr_verify(digest, bytes.fromhex(owner), bytes.fromhex(signature)):
+        return None
+    return owner
+
+
+# --------------------------------------------------------------------------
 # buzz CLI invocation
 # --------------------------------------------------------------------------
 
@@ -260,13 +668,21 @@ def run_buzz(
     environment["BUZZ_RELAY_URL"] = relay_url(config)
     environment["BUZZ_PRIVATE_KEY"] = identity["private_key"]
     environment["BUZZ_AUTH_TAG"] = identity["auth_tag"]
-    completed = subprocess.run(
-        [binary] + args,
-        env=environment,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-    )
+    try:
+        completed = subprocess.run(
+            [binary] + args,
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            timeout=cli_timeout(),
+        )
+    except subprocess.TimeoutExpired:
+        raise UserError(
+            "buzz {0} did not answer within {1} seconds".format(
+                " ".join(args[:2]), cli_timeout()
+            )
+        )
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout or "").strip()
         message = "buzz {0} failed (exit {1}): {2}".format(
@@ -276,24 +692,6 @@ def run_buzz(
             # One line, because doctor renders this inside a JSON report.
             message = "{0} {1}".format(message, RELAY_MEMBERSHIP_HINT)
         raise UserError(message)
-    return completed.stdout
-
-
-def run_plain(binary: str, args: List[str]) -> str:
-    """Run a helper binary without any Buzz identity in the environment."""
-    completed = subprocess.run(
-        [binary] + args,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-    )
-    if completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout or "").strip()
-        raise UserError(
-            "{0} failed (exit {1}): {2}".format(
-                Path(binary).name, completed.returncode, detail
-            )
-        )
     return completed.stdout
 
 
@@ -404,6 +802,16 @@ def validate_content(content: str) -> str:
             "substitutions before publishing: {0}. Put technical identifiers in "
             "inline code or fenced code, and quoted source text in a Markdown "
             "block quote.".format(", ".join(substitutions))
+        )
+    secret_hits = sorted(
+        {name for name, pattern in SECRET_PATTERNS if pattern.search(content)}
+    )
+    if secret_hits:
+        raise UserError(
+            "Buzz project update must not contain secret material (matched: {0}). "
+            "Mask or remove credentials before publishing.".format(
+                ", ".join(secret_hits)
+            )
         )
     return content
 
@@ -789,23 +1197,13 @@ def command_provision(arguments: argparse.Namespace) -> int:
             "be re-granted).".format(identity_path())
         )
 
-    admin_binary = resolve_binary(config, "buzz_admin_bin", "buzz-admin")
-    auth_tag_binary = resolve_binary(config, "auth_tag_bin", "compute_auth_tag")
-
-    generated = run_plain(admin_binary, ["generate-key"])
-    secret = ""
-    public = ""
-    for line in generated.splitlines():
-        if "Secret key:" in line:
-            secret = line.split("Secret key:", 1)[1].strip()
-        elif "Public key:" in line:
-            public = line.split("Public key:", 1)[1].strip()
-    if not secret or not public:
-        raise UserError("Could not parse the generated keypair from buzz-admin")
-
-    auth_tag = run_plain(auth_tag_binary, [owner_secret, public]).strip()
-    if not auth_tag:
-        raise UserError("compute_auth_tag returned an empty auth tag")
+    # The owner key is parsed before anything is generated, so a mistyped key
+    # fails before an identity file exists.
+    owner = parse_owner_secret(owner_secret)
+    secret, public = generate_keypair()
+    auth_tag = compute_auth_tag(owner, public)
+    if verify_auth_tag(auth_tag, public) is None:
+        raise UserError("The generated owner attestation did not verify.")
 
     save_identity(secret, public, auth_tag)
     identity = {"private_key": secret, "public_key": public, "auth_tag": auth_tag}
@@ -957,6 +1355,143 @@ def command_attach(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def parse_marker(content: str) -> Optional[re.Match]:
+    """Return the lifecycle marker match for content, or None."""
+    return MARKER_RE.search(content)
+
+
+def thread_root(event: Dict[str, Any]) -> str:
+    """Resolve an event to its thread root via the reply e-tag.
+
+    Lifecycle results are replies to the start's root event, and agents name
+    their update ids freely (``X-start`` vs ``X-result``). Threads are the real
+    unit of an open update, not the update id, so open detection must group by
+    root. NIP-29 threaded replies carry ``["e", <root>, "", "reply"]``.
+    """
+    tags = event.get("tags")
+    if isinstance(tags, list):
+        for tag in tags:
+            if (
+                isinstance(tag, list)
+                and len(tag) >= 4
+                and tag[0] == "e"
+                and tag[3] == "reply"
+            ):
+                return str(tag[1])
+    return str(event.get("id") or "")
+
+
+def command_open(arguments: argparse.Namespace) -> int:
+    """List update threads that started but never reached a closing phase.
+
+    Mirrors 'context' argument handling: a bare number is a limit, a repo id
+    may be given explicitly. Output is deterministic JSON for tooling.
+    """
+    config = load_config()
+    repo_id = arguments.repo_id
+    limit = arguments.limit
+    if repo_id is not None and repo_id.isdigit():
+        if limit is not None:
+            raise UserError("Give at most one numeric argument to 'open'")
+        limit = int(repo_id)
+        repo_id = None
+    if limit is None:
+        limit = 100
+    if limit < 1 or limit > 200:
+        raise UserError("Buzz message limit must be between 1 and 200")
+    repo_id, channel_id = resolve_project(config, repo_id)
+    raw = run_buzz(
+        config,
+        ["messages", "get", "--channel", channel_id, "--limit", str(limit)],
+    )
+    try:
+        events = json.loads(raw or "[]")
+    except ValueError as error:
+        raise UserError(
+            "Could not parse channel messages from buzz: {0}".format(error)
+        )
+    if not isinstance(events, list):
+        raise UserError("Unexpected message payload type from buzz")
+
+    threads = {}
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        content = str(event.get("content") or "")
+        match = parse_marker(content)
+        if match is None:
+            continue
+        phase = match.group(1) or "result"
+        agent = match.group(2)
+        update_id = match.group(3)
+        seen = int(event.get("created_at") or 0)
+        root = thread_root(event)
+        thread = threads.setdefault(
+            root,
+            {
+                "root": root,
+                "phases": [],
+                "first_seen": seen,
+                "last_seen": seen,
+                "agent": agent,
+                "update_id": update_id,
+                "snippet": "",
+            },
+        )
+        if phase not in thread["phases"]:
+            thread["phases"].append(phase)
+        if seen:
+            thread["first_seen"] = min(thread["first_seen"], seen)
+            thread["last_seen"] = max(thread["last_seen"], seen)
+        if phase == "started" and not thread["snippet"]:
+            thread["agent"] = agent
+            thread["update_id"] = update_id
+            thread["snippet"] = content[match.end():].strip()[:120]
+
+    open_threads = [
+        thread
+        for thread in threads.values()
+        if "started" in thread["phases"]
+        and not set(CLOSING_PHASES).intersection(thread["phases"])
+    ]
+    open_threads.sort(
+        key=lambda thread: (thread["last_seen"] == 0, -thread["last_seen"])
+    )
+    print(
+        json.dumps(
+            {
+                "repo_id": repo_id,
+                "channel_id": channel_id,
+                "reviewed": len(events),
+                "open": open_threads,
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def command_correct(arguments: argparse.Namespace) -> int:
+    """Publish a top-level correction that supersedes an earlier update.
+
+    A correction is deliberately not a thread reply: Buzz renders replies only
+    inside the collapsible thread panel, so a retraction that hides there stays
+    invisible in the channel timeline. The superseded event ID is appended to
+    the content as a validated reference line and echoed in the payload.
+    """
+    config = load_config()
+    validate_root_event(arguments.supersedes)
+    content = "{0} Korrigiertes Event: {1}".format(
+        arguments.content.rstrip(), arguments.supersedes
+    )
+    payload = publish(
+        config, "correction", arguments.update_id, content, None, arguments.repo_id
+    )
+    payload["supersedes"] = arguments.supersedes
+    print(json.dumps(payload))
+    return 0
+
+
 def command_doctor(_: argparse.Namespace) -> int:
     findings = [("helper_version", "ok", HELPER_VERSION)]
     ok = True
@@ -968,18 +1503,26 @@ def command_doctor(_: argparse.Namespace) -> int:
         print(json.dumps({"ok": False, "checks": [["config", "fail", str(error)]]}, indent=2))
         return 1
 
-    for key, default in (
-        ("buzz_bin", "buzz"),
-        ("buzz_admin_bin", "buzz-admin"),
-        ("auth_tag_bin", "compute_auth_tag"),
-    ):
-        try:
-            findings.append((key, "ok", resolve_binary(config, key, default)))
-        except UserError as error:
-            # Only the buzz CLI is needed for day-to-day publishing.
-            severity = "fail" if key == "buzz_bin" else "warn"
-            ok = ok and severity != "fail"
-            findings.append((key, severity, str(error)))
+    try:
+        findings.append(("buzz_bin", "ok", resolve_binary(config, "buzz_bin", "buzz")))
+    except UserError as error:
+        ok = False
+        findings.append(("buzz_bin", "fail", str(error)))
+
+    # Configs written before provisioning became self-contained still name
+    # buzz-admin and compute_auth_tag. Nothing reads them any more; say so
+    # once instead of resolving paths that no longer need to exist.
+    obsolete = [key for key in ("buzz_admin_bin", "auth_tag_bin") if config.get(key)]
+    if obsolete:
+        findings.append(
+            (
+                "obsolete_keys",
+                "warn",
+                "{0} are no longer used and can be removed from {1}".format(
+                    " and ".join(sorted(obsolete)), config_path()
+                ),
+            )
+        )
 
     installed = agent_home() / "bin" / "project-buzz"
     if installed.is_file() and os.access(str(installed), os.X_OK):
@@ -1067,6 +1610,24 @@ def build_parser() -> argparse.ArgumentParser:
     context.add_argument("repo_id", nargs="?", default=None)
     context.add_argument("limit", nargs="?", type=int, default=None)
     context.set_defaults(handler=command_context)
+
+    open_cmd = sub.add_parser(
+        "open",
+        help="List updates that started but never reached a closing phase",
+    )
+    open_cmd.add_argument("repo_id", nargs="?", default=None)
+    open_cmd.add_argument("limit", nargs="?", type=int, default=None)
+    open_cmd.set_defaults(handler=command_open)
+
+    correct = sub.add_parser(
+        "correct",
+        help="Publish a top-level correction that supersedes an earlier update",
+    )
+    correct.add_argument("update_id")
+    correct.add_argument("content")
+    correct.add_argument("--supersedes", required=True)
+    correct.add_argument("repo_id", nargs="?", default=None)
+    correct.set_defaults(handler=command_correct)
 
     for phase in LIFECYCLE_PHASES:
         lifecycle = sub.add_parser(phase, help="Publish a {0} update".format(phase))

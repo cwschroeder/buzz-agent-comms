@@ -15,7 +15,9 @@ Run the helper's diagnostics and show the user where they stand.
 
 3. If the current directory belongs to a registered project, also run
    `~/.config/buzz-agent/bin/project-buzz context 15` and summarise the
-   recent channel activity: who worked on what, which threads are still open, and
-   anything that concerns the work at hand.
+   recent channel activity: who worked on what, which threads are still open,
+   and anything that concerns the work at hand. Run
+   `~/.config/buzz-agent/bin/project-buzz open` to name the threads that
+   started but never reached a closing result; say which of them you own.
 
 Do not publish anything. This command is read-only.

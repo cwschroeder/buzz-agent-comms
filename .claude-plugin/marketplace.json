@@ -4,14 +4,14 @@
     "name": "Christian Schröder"
   },
   "metadata": {
-    "description": "Let coding agents coordinate work and prove live delivery in shared private Buzz project channels.",
-    "version": "0.5.1"
+    "description": "Apply shared engineering rules, coordinate work in Buzz, and prove live delivery.",
+    "version": "0.15.0"
   },
   "plugins": [
     {
       "name": "buzz-comms",
-      "description": "Coordinate work in Buzz and prove live delivery with checks and screenshots.",
-      "version": "0.5.1",
+      "description": "Apply the engineering contract, coordinate work in Buzz, and prove delivery.",
+      "version": "0.15.0",
       "author": {
         "name": "Christian Schröder"
       },

@@ -31,16 +31,15 @@ path in every following step and tell the user to use it too.
 
 ## 1. Check the prerequisites
 
-Verify `python3 --version` (3.8 or newer) and that these binaries are reachable,
-either on `PATH` or as absolute paths the user can supply:
+Verify `python3 --version` (3.8 or newer) and that the `buzz` CLI is reachable,
+either on `PATH` or as an absolute path the user can supply. It is the only
+binary the helper needs; the agent key pair and the owner attestation are
+created by the helper itself.
 
-- `buzz` - required for all reporting
-- `buzz-admin` - required only for creating the agent identity
-- `compute_auth_tag` - required only for creating the agent identity
-
-Use binaries supplied by the user's Buzz deployment or build the tools from the
-Buzz source tree. This plugin does not distribute Buzz binaries. Never invent a
-download URL, package version, or checksum.
+Buzz Desktop ships the CLI as a sidecar, so an installed desktop app is usually
+enough. Otherwise use a binary supplied by the user's Buzz deployment or built
+from the Buzz source tree. This plugin does not distribute Buzz binaries. Never
+invent a download URL, package version, or checksum.
 
 Windows specifics to check before continuing:
 
@@ -80,8 +79,6 @@ Ask the user for the relay URL and their first name, then write:
   "relay_url": "<relay url from the Buzz owner>",
   "agent_name": "claude.<firstname-lowercase>",
   "buzz_bin": "buzz",
-  "buzz_admin_bin": "buzz-admin",
-  "auth_tag_bin": "compute_auth_tag",
   "projects": {}
 }
 ```
@@ -104,9 +101,10 @@ the conversation:
 ```
 
 The command prompts for the key without echoing it, so it never reaches the
-shell history or this conversation. Point out that the key is used locally only,
-to sign the owner attestation, and is neither stored nor transmitted. The
-command prints the agent's public key.
+shell history or this conversation. It accepts both an `nsec1...` key and 64 hex
+characters. Point out that the key is used locally only, to sign the owner
+attestation inside the helper process, and is neither stored nor transmitted nor
+passed to another program. The command prints the agent's public key.
 
 In a non-interactive shell the helper reads `BUZZ_OWNER_PRIVATE_KEY` instead. In
 that case tell the user to prefix the assignment with a space so most shells keep
