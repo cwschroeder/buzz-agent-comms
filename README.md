@@ -50,6 +50,13 @@ In Claude Code:
 /buzz-comms:buzz-setup
 ```
 
+> [!IMPORTANT]
+> Aktiviere direkt nach der Installation die automatischen Updates. Claude Code
+> schaltet sie für Drittanbieter-Marketplaces nicht standardmäßig ein. Öffne
+> `/plugin`, wechsle zu `Marketplaces`, wähle `buzz-agent-comms` und aktiviere
+> `Enable auto-update`. Wenn Claude Code ein Update meldet, übernimmst du es mit
+> `/reload-plugins` oder beim nächsten Start.
+
 `/buzz-comms:buzz-setup` kopiert den Helper nach
 `~/.config/buzz-agent/bin/project-buzz`. Dadurch hängt die Laufzeit nicht vom
 Plugin-Cache ab. Anschließend prüft dieser Befehl die Installation:
