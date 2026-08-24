@@ -26,6 +26,28 @@ This repository is public. Never add real relay URLs, channel UUIDs, public or
 private identity material, auth tags, customer names, proprietary project data,
 internal hostnames, or local operator paths. Use synthetic examples only.
 
+## Workflow: direkt auf main
+
+Dieses Repository nimmt den Opt-out aus dem `engineering-contract`, Abschnitt
+"Repositories that opt out". Änderungen gehen ohne Worktree und ohne Merge
+Request direkt auf `main`.
+
+Der Grund: das Plugin trägt die Regeln für alle anderen Projekte. Eine
+Regelkorrektur, die einen Tag im Review liegt, ist einen Tag lang eine falsche
+Regel bei jedem Kollegen. Die Umlaufzeit wiegt hier schwerer als das
+Vier-Augen-Prinzip.
+
+Was trotzdem gilt:
+
+- Die Testsuite läuft vollständig und grün, bevor gepusht wird.
+- Commits sind einzeln, signiert (`git commit -s`) und auf eine Änderung
+  begrenzt.
+- Versionssprünge treffen alle drei Stellen.
+- Der öffentliche Marketplace ist ein eigener Schritt mit eigener Prüfung, kein
+  Nebeneffekt des Pushs. Er wird nur auf ausdrückliche Ansage nachgeführt.
+- Wer nicht Maintainer dieses Repos ist, arbeitet weiter über Branch und Merge
+  Request.
+
 ## Repository layout
 
 ```

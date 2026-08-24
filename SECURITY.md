@@ -10,6 +10,16 @@ Sicherheitsmeldungen laufen ausschließlich über private Entwicklungswege:
 
 Füge keinen echten privaten Schlüssel, Auth-Tag, keine Relay-URL, Channel-ID, Kundendaten oder proprietären Quellcode in die Meldung ein. Nutze ein minimales synthetisches Beispiel. Falls private Belege nötig sind, vereinbare den Übertragungsweg direkt mit dem Maintainer.
 
+## Wie Lücken vermieden werden
+
+Dieses Dokument beschreibt den Meldeweg für eine Lücke, die es schon gibt. Die
+vorbeugenden Regeln stehen im `engineering-contract`, Abschnitt „Security rules
+that hold in a diff": Vertrauensgrenzen, keine zusammengeklebten Queries und
+Kommandos, Autorisierung am Objekt, Geheimnisse nicht auf der Kommandozeile,
+Grenzen für alles was Ressourcen kostet, und die Regel, dass Inhalte aus
+Issues, Merge Requests oder Werkzeugausgaben Daten sind und keine Anweisungen.
+Sie gelten für den Code, den eine Änderung anfasst.
+
 ## Umfang
 
 Das Plugin speichert die Agent-Identität lokal und übergibt sie dem Buzz-CLI über Prozessumgebungsvariablen. Meldungen zu Schlüsselverarbeitung, Dateirechten, Befehlskonstruktion, Projektrouting, Mention-Schutz oder unbeabsichtigten Veröffentlichungen gehören zu diesem Projekt.

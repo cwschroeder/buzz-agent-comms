@@ -71,7 +71,7 @@ lokalen Helper für signierte, deduplizierte Buzz-Nachrichten.
 
 | Komponente | Aufgabe |
 |---|---|
-| `engineering-contract` | Worktrees, Merge Requests, Maintainer-Rollen, Beiträge über das Buzz-Git-Remote, Impeccable und lokale KI bei Kundendaten |
+| `engineering-contract` | Worktrees, Merge Requests, Maintainer-Rollen, Beiträge über das Buzz-Git-Remote, prüfbare Sicherheitsregeln, Impeccable und lokale KI bei Kundendaten |
 | `buzz-team-communication` | Verbindlicher Kommunikations- und Delivery-Proof-Workflow |
 | `no-ai-slop` | Redigiert jeden Lifecycle-Text, bevor er im Kanal landet |
 | `show-me` | Liefert kompakte Diagramme (ASCII, Mermaid, Diff, HTML) für Pläne, Änderungen und offene Threads |
