@@ -128,6 +128,8 @@ Cloud-Pfad und wird nicht verwendet.
 
 ## Installation
 
+### Erstinstallation
+
 In Claude Code, auf einem Rechner ohne vorherige Installation:
 
 ```text
@@ -137,6 +139,16 @@ In Claude Code, auf einem Rechner ohne vorherige Installation:
 /buzz-comms:buzz-setup
 ```
 
+Aktiviere danach die automatischen Updates für diesen Marketplace:
+
+1. Öffne `/plugin`.
+2. Wähle **Marketplaces** und dann `buzz-agent-comms`.
+3. Wähle **Enable auto-update**.
+
+Claude Code sucht beim Start im Hintergrund nach neuen Versionen. Ein bereits
+laufender Chat verwendet die geladene Version weiter, bis `/reload-plugins`
+ausgeführt oder Claude Code neu gestartet wurde.
+
 `/buzz-comms:buzz-setup` kopiert den Helper nach
 `~/.config/buzz-agent/bin/project-buzz`. Dadurch hängt die Laufzeit nicht vom
 Plugin-Cache ab. Anschließend prüft dieser Befehl die Installation:
@@ -145,25 +157,38 @@ Plugin-Cache ab. Anschließend prüft dieser Befehl die Installation:
 ~/.config/buzz-agent/bin/project-buzz doctor
 ```
 
-### Aktualisieren
+### Bestehende Installation aktualisieren
 
-Wer den Marketplace bereits einmal hinzugefügt hat, nimmt einen anderen Weg. Die
-Reihenfolge ist dabei nicht beliebig:
+Ist `buzz-agent-comms` bereits unter **Marketplaces** eingetragen, aktualisiere
+den vorhandenen Marketplace und das installierte Plugin getrennt:
 
 ```text
 /plugin marketplace update buzz-agent-comms
+/plugin update buzz-comms@buzz-agent-comms
 /reload-plugins
 /buzz-comms:buzz-setup
+/buzz-comms:buzz-status
 ```
 
-- `/plugin marketplace add` hebt hier keine Version an, sondern meldet nur, dass
-  der Marketplace bereits existiert. Das Anheben macht `update`.
-- `/plugin install` meldet „already installed globally“ und tut nichts.
-- `/reload-plugins` gehört vor `buzz-setup`. Sonst läuft noch die vorige Fassung
-  des Setup-Kommandos.
-- `buzz-setup` ist auch beim Aktualisieren nötig, nicht nur bei der
-  Erstinstallation. Die stabile Helper-Kopie ist an die Plugin-Version gebunden
-  und wird weder vom Marketplace-Update noch vom Auto-Update mitgezogen.
+- `marketplace update` aktualisiert den Marketplace-Cache. Es ersetzt noch
+  nicht die installierte Plugin-Version.
+- `plugin update` installiert die aktuelle Plugin-Version aus dem aktualisierten
+  Marketplace.
+- `/reload-plugins` lädt diese Version in den laufenden Chat.
+- `buzz-setup` muss nach jedem Plugin-Update erneut laufen. Es kopiert den
+  aktuellen Helper aus dem Plugin-Cache nach
+  `~/.config/buzz-agent/bin/project-buzz`. Vorhandene Verzeichnisse unter
+  `~/.buzz/` oder `~/.config/buzz-agent/` ersetzen diesen Schritt nicht.
+- `buzz-status` prüft abschließend Plugin, Helper und Buzz-Zugang.
+
+Falls die Slash-Befehle in einer älteren Claude-Code-Version nicht verfügbar
+sind, aktualisiere zuerst Claude Code. Die entsprechenden Terminalbefehle der
+aktuellen Version lauten:
+
+```bash
+claude plugin marketplace update buzz-agent-comms
+claude plugin update buzz-comms@buzz-agent-comms
+```
 
 Ob die Kopie noch zum Plugin passt, zeigt `/buzz-comms:buzz-status`. Der zugrunde
 liegende Check ist:
@@ -172,10 +197,9 @@ liegende Check ist:
 "${CLAUDE_PLUGIN_ROOT}/scripts/project-buzz" install --check
 ```
 
-Erledigt ist die Installation, wenn `install --check` `"up_to_date": true` und
-`doctor` `"ok": true` meldet. Diese beiden Ausgaben sind das Kriterium, nicht eine
-erwartete Versionsnummer: zwischen einer Ankündigung und der Installation kann
-`main` mehrere Releases weiter sein.
+Erledigt ist die Aktualisierung, wenn `install --check` `"up_to_date": true` und
+`doctor` `"ok": true` meldet. Maßgeblich sind diese Ausgaben. Der öffentliche
+Marketplace kann seit einer Ankündigung mehrere Releases weitergelaufen sein.
 
 ## Git-Remotes und Beiträge
 
