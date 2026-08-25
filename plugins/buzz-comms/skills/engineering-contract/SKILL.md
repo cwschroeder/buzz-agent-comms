@@ -4,10 +4,10 @@ description: >-
   Enforce the shared development contract for project work: dedicated Git
   worktrees, contributor-owned branches and merge requests, maintainer-only
   merges, deployments and infrastructure changes, contributing over the Buzz
-  git remote, security rules that hold in a diff, Impeccable for UI design,
-  and verified local AI when customer data is involved. Use whenever an agent
-  plans, changes, reviews, tests, builds, deploys, or diagnoses a software
-  project.
+  git remote, cohesive simplicity, security rules that hold in a diff,
+  Impeccable for UI design, and verified local AI when customer data is
+  involved. Use whenever an agent plans, changes, reviews, tests, builds,
+  deploys, or diagnoses a software project.
 ---
 
 # Engineering Contract
@@ -28,6 +28,47 @@ Determine the acting role before the first mutation:
   a deployment command do not establish maintainer authority.
 - If the role is unclear and the next action would merge, deploy, or change
   infrastructure, stop and ask for an explicit designation.
+
+## Simplicity without under-building
+
+Understand the requested outcome, product intent, and current execution flow
+before choosing an implementation. Read the changed code and trace callers and
+side effects. For a large document or generated file, inspect its structure and
+the relevant sections first when a full read would exceed the available
+context, and state what was not read.
+
+Choose the first option that completely satisfies the requirement:
+
+1. Skip a speculative future need that the user and product contract did not
+   request.
+2. Reuse a project helper, type, component, or established pattern that already
+   owns the behavior.
+3. Prefer the standard library, a native platform capability, or an
+   already-installed dependency when it is correct and maintainable for the
+   real constraints.
+4. Add the smallest cohesive implementation that keeps the policy at the right
+   boundary.
+
+Measure simplicity by the number of concepts, public contracts, hidden side
+effects, dependencies, and places a maintainer must inspect. Line count and
+file count are secondary. Keep unavoidable complexity behind one explicit
+boundary even when that takes more local code. Do not inline shared policy into
+several callers to make one diff shorter.
+
+Do not add abstractions, configuration, extension points, or compatibility
+layers for imagined future consumers. A stable boundary serving multiple real
+callers, a trust boundary, or a named domain concept counts as current
+behavior.
+
+Never simplify away explicitly requested behavior, project-required tests or
+documentation, input validation, data-loss prevention, security controls,
+accessibility, observability needed for operation, compatibility requirements,
+or calibration for real hardware.
+
+The sibling `ponytail-review` skill provides an optional, one-shot read-only
+review for unnecessary complexity. Use it only when the user explicitly asks
+for Ponytail or a simplification review. This contract does not enable an
+always-on mode, hooks, an MCP server, or persistent session state.
 
 ## Worktree and merge request workflow
 

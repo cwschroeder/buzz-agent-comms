@@ -6,6 +6,19 @@ Walk the user through setting up Buzz agent reporting on this machine. Work
 through the steps in order and stop at the first one that fails, telling the user
 exactly what is missing.
 
+This command is also the required post-update migration. Existing `~/.buzz/`
+or `~/.config/buzz-agent/` directories do not make step 0 optional. If the user
+still has to update an existing plugin installation, tell them to run these
+commands first, then invoke this setup command again:
+
+```text
+/plugin marketplace update buzz-agent-comms
+/plugin update buzz-comms@buzz-agent-comms
+/reload-plugins
+```
+
+Do not add an already registered marketplace again.
+
 ## 0. Install the helper at a stable path
 
 Locate the helper inside this plugin. Try `${CLAUDE_PLUGIN_ROOT}/scripts/project-buzz`
