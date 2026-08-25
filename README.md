@@ -128,11 +128,12 @@ Cloud-Pfad und wird nicht verwendet.
 
 ## Installation
 
-In Claude Code:
+In Claude Code, auf einem Rechner ohne vorherige Installation:
 
 ```text
 /plugin marketplace add https://github.com/cwschroeder/buzz-agent-comms.git
 /plugin install buzz-comms@buzz-agent-comms
+/reload-plugins
 /buzz-comms:buzz-setup
 ```
 
@@ -144,12 +145,37 @@ Plugin-Cache ab. Anschließend prüft dieser Befehl die Installation:
 ~/.config/buzz-agent/bin/project-buzz doctor
 ```
 
-Nach einem Plugin-Update zeigt `/buzz-comms:buzz-status`, ob diese stabile Kopie
-noch zum Plugin passt. Der zugrunde liegende Check ist:
+### Aktualisieren
+
+Wer den Marketplace bereits einmal hinzugefügt hat, nimmt einen anderen Weg. Die
+Reihenfolge ist dabei nicht beliebig:
+
+```text
+/plugin marketplace update buzz-agent-comms
+/reload-plugins
+/buzz-comms:buzz-setup
+```
+
+- `/plugin marketplace add` hebt hier keine Version an, sondern meldet nur, dass
+  der Marketplace bereits existiert. Das Anheben macht `update`.
+- `/plugin install` meldet „already installed globally“ und tut nichts.
+- `/reload-plugins` gehört vor `buzz-setup`. Sonst läuft noch die vorige Fassung
+  des Setup-Kommandos.
+- `buzz-setup` ist auch beim Aktualisieren nötig, nicht nur bei der
+  Erstinstallation. Die stabile Helper-Kopie ist an die Plugin-Version gebunden
+  und wird weder vom Marketplace-Update noch vom Auto-Update mitgezogen.
+
+Ob die Kopie noch zum Plugin passt, zeigt `/buzz-comms:buzz-status`. Der zugrunde
+liegende Check ist:
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/scripts/project-buzz" install --check
 ```
+
+Erledigt ist die Installation, wenn `install --check` `"up_to_date": true` und
+`doctor` `"ok": true` meldet. Diese beiden Ausgaben sind das Kriterium, nicht eine
+erwartete Versionsnummer: zwischen einer Ankündigung und der Installation kann
+`main` mehrere Releases weiter sein.
 
 ## Git-Remotes und Beiträge
 
@@ -415,12 +441,31 @@ verschwinden.
 
 ## Windows
 
-Unter Windows den Helper nicht über seinen `python3`-Shebang starten. Das Setup
-erzeugt dafür einen Launcher:
+Unter Windows den Helper nicht über seinen `python3`-Shebang starten. CPython
+installiert dort nur `python.exe` und `pythonw.exe`. Ein Aufruf über `python3`
+trifft deshalb den Platzhalter aus dem Microsoft Store und bricht mit Exit 49 ab,
+obwohl Python installiert ist:
+
+```text
+Python wurde nicht gefunden; ohne Argumente ausführen, um aus dem
+Microsoft Store zu installieren ...
+```
+
+Das Setup erzeugt dafür einen Launcher:
 
 ```text
 python ~/.config/buzz-agent/bin/project-buzz <command>  # Git Bash
 project-buzz.cmd <command>                              # cmd oder PowerShell
+```
+
+Wer den Aufruf über den Shebang dauerhaft braucht, legt neben `python.exe` eine
+Kopie namens `python3.exe` an. Das Python-Verzeichnis liegt in `PATH` vor
+`WindowsApps` und gewinnt damit. Ein Wechsel der Python-Minorversion legt ein
+neues Verzeichnis an, in dem die Kopie wieder fehlt.
+
+```text
+copy "%LOCALAPPDATA%\Programs\Python\Python3XX\python.exe" ^
+     "%LOCALAPPDATA%\Programs\Python\Python3XX\python3.exe"
 ```
 
 Wenn die verdeckte Schlüsselabfrage unter Git Bash wegen mintty nicht erscheint,
