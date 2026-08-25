@@ -26,6 +26,13 @@ lokalen Helper für signierte, deduplizierte Buzz-Nachrichten.
 - Bevorzugt bei Zugriff auf Kundendaten einen verifiziert lokalen KI-Pfad und
   verbietet einen stillen Cloud-Fallback. Kundendaten müssen vor jeder
   Veröffentlichung entfernt oder sicher anonymisiert werden.
+- Verlangt die kleinste zusammenhängende Lösung, die den vollständigen
+  Produktvertrag erfüllt. Bestehende Projektmuster, Standardbibliothek und
+  native Plattformfunktionen haben Vorrang vor neuen Abstraktionen und
+  Abhängigkeiten.
+- Liefert mit `/buzz-comms:ponytail-review` einen optionalen, rein lesenden
+  Review gegen unnötige Komplexität. Der Review prüft Caller und Diff-Basis und
+  verändert weder Dateien noch den Sitzungsmodus.
 - Veröffentlicht Start, relevante Fortschritte und genau ein belegtes Ergebnis.
 - Trennt reviewbereite Arbeit klar von tatsächlich ausgeliefertem Code.
 - Verlangt bei nutzersichtbaren Änderungen den Nachweis auf der kanonischen
@@ -76,6 +83,7 @@ lokalen Helper für signierte, deduplizierte Buzz-Nachrichten.
 | `no-ai-slop` | Redigiert jeden Lifecycle-Text, bevor er im Kanal landet |
 | `show-me` | Liefert kompakte Diagramme (ASCII, Mermaid, Diff, HTML) für Pläne, Änderungen und offene Threads |
 | `bro` | Erklärt die letzte Antwort in klarer Sprache neu (MIT, vendiert aus `luchasarie/bro-skill`) |
+| `ponytail-review` | Prüft einen Diff auf belegte, vermeidbare Komplexität (MIT, angepasst aus `DietrichGebert/ponytail`) |
 | Guardrails | Plain-Language-Pflicht (/bro), Projekt-Doku-Satz (PRODUCT/DESIGN/ARCHITECTURE/DEPLOYMENT/LEARNINGS) und Aufgaben-Tracker (tasks/tasks.md), Datei-Bedeutung verankert in AGENTS.md/CLAUDE.md |
 | `scripts/project-buzz` | Portabler Python-Helper für Identität, Routing, Lifecycle und Anhänge |
 | `/buzz-comms:buzz-setup` | Geführte Einrichtung |
@@ -94,6 +102,17 @@ Task-Branch und erstellen oder aktualisieren einen Merge Request. Sie mergen
 nicht selbst in `master` oder den ausdrücklich festgelegten geschützten
 Integrationsbranch. Nur der Maintainer führt den Merge durch, deployed den
 gemergten Stand und verwaltet die dafür benötigte Infrastruktur.
+
+Der Vertrag minimiert Konzepte, öffentliche Schnittstellen, versteckte
+Seiteneffekte und zusätzliche Abhängigkeiten. Die Zeilenzahl bleibt ein
+Nebenmaß. Notwendige Komplexität bleibt an einer klaren gemeinsamen Grenze,
+damit sie nicht in mehrere Caller ausweicht. Tests, Dokumentation, Sicherheit,
+Barrierefreiheit und ausdrücklich verlangtes Verhalten bleiben vollständig
+erhalten.
+
+`/buzz-comms:ponytail-review` startet bei Bedarf einen einmaligen Review des
+aktuellen Diffs. Das Plugin übernimmt keine dauerhaften Ponytail-Hooks, Modi,
+MCP-Server oder Sitzungsdateien.
 
 Für UI-Arbeit muss der `impeccable`-Skill im Skill-Katalog des Kollegen
 installiert sein. Das Plugin enthält die verbindliche Aktivierungs- und
@@ -445,3 +464,10 @@ Lizenzdatei liegt unverändert neben dem Skill unter
 Das danebenliegende `voice-profile.md` beschreibt ausschließlich den
 öffentlichen Stil für Buzz-Lifecycle-Texte. Private Schreibproben und
 persönliche Profile gehören nicht in dieses Repository.
+
+Der mitgelieferte Skill `ponytail-review` wurde aus
+[`DietrichGebert/ponytail`](https://github.com/DietrichGebert/ponytail) Version
+4.9.0, Commit
+`0a4dd63ad4541f4f655c4108a295916f3c1d8fda`, für diesen Entwicklungsvertrag
+angepasst. Er steht unter MIT. Die unveränderte Lizenz liegt unter
+`plugins/buzz-comms/skills/ponytail-review/LICENSE` und gehört zu jeder Kopie.
