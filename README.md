@@ -26,6 +26,13 @@ lokalen Helper für signierte, deduplizierte Buzz-Nachrichten.
 - Bevorzugt bei Zugriff auf Kundendaten einen verifiziert lokalen KI-Pfad und
   verbietet einen stillen Cloud-Fallback. Kundendaten müssen vor jeder
   Veröffentlichung entfernt oder sicher anonymisiert werden.
+- Verlangt die kleinste zusammenhängende Lösung, die den vollständigen
+  Produktvertrag erfüllt. Bestehende Projektmuster, Standardbibliothek und
+  native Plattformfunktionen haben Vorrang vor neuen Abstraktionen und
+  Abhängigkeiten.
+- Liefert mit `/buzz-comms:ponytail-review` einen optionalen, rein lesenden
+  Review gegen unnötige Komplexität. Der Review prüft Caller und Diff-Basis und
+  verändert weder Dateien noch den Sitzungsmodus.
 - Veröffentlicht Start, relevante Fortschritte und genau ein belegtes Ergebnis.
 - Trennt reviewbereite Arbeit klar von tatsächlich ausgeliefertem Code.
 - Verlangt bei nutzersichtbaren Änderungen den Nachweis auf der kanonischen
@@ -76,6 +83,7 @@ lokalen Helper für signierte, deduplizierte Buzz-Nachrichten.
 | `no-ai-slop` | Redigiert jeden Lifecycle-Text, bevor er im Kanal landet |
 | `show-me` | Liefert kompakte Diagramme (ASCII, Mermaid, Diff, HTML) für Pläne, Änderungen und offene Threads |
 | `bro` | Erklärt die letzte Antwort in klarer Sprache neu (MIT, vendiert aus `luchasarie/bro-skill`) |
+| `ponytail-review` | Prüft einen Diff auf belegte, vermeidbare Komplexität (MIT, angepasst aus `DietrichGebert/ponytail`) |
 | Guardrails | Plain-Language-Pflicht (/bro), Projekt-Doku-Satz (PRODUCT/DESIGN/ARCHITECTURE/DEPLOYMENT/LEARNINGS) und Aufgaben-Tracker (tasks/tasks.md), Datei-Bedeutung verankert in AGENTS.md/CLAUDE.md |
 | `scripts/project-buzz` | Portabler Python-Helper für Identität, Routing, Lifecycle und Anhänge |
 | `/buzz-comms:buzz-setup` | Geführte Einrichtung |
@@ -95,6 +103,17 @@ nicht selbst in `master` oder den ausdrücklich festgelegten geschützten
 Integrationsbranch. Nur der Maintainer führt den Merge durch, deployed den
 gemergten Stand und verwaltet die dafür benötigte Infrastruktur.
 
+Der Vertrag minimiert Konzepte, öffentliche Schnittstellen, versteckte
+Seiteneffekte und zusätzliche Abhängigkeiten. Die Zeilenzahl bleibt ein
+Nebenmaß. Notwendige Komplexität bleibt an einer klaren gemeinsamen Grenze,
+damit sie nicht in mehrere Caller ausweicht. Tests, Dokumentation, Sicherheit,
+Barrierefreiheit und ausdrücklich verlangtes Verhalten bleiben vollständig
+erhalten.
+
+`/buzz-comms:ponytail-review` startet bei Bedarf einen einmaligen Review des
+aktuellen Diffs. Das Plugin übernimmt keine dauerhaften Ponytail-Hooks, Modi,
+MCP-Server oder Sitzungsdateien.
+
 Für UI-Arbeit muss der `impeccable`-Skill im Skill-Katalog des Kollegen
 installiert sein. Das Plugin enthält die verbindliche Aktivierungs- und
 Abbruchregel, vendiert den externen Skill aber nicht. Der Agent lädt vor jeder
@@ -109,13 +128,26 @@ Cloud-Pfad und wird nicht verwendet.
 
 ## Installation
 
-In Claude Code:
+### Erstinstallation
+
+In Claude Code, auf einem Rechner ohne vorherige Installation:
 
 ```text
 /plugin marketplace add https://github.com/cwschroeder/buzz-agent-comms.git
 /plugin install buzz-comms@buzz-agent-comms
+/reload-plugins
 /buzz-comms:buzz-setup
 ```
+
+Aktiviere danach die automatischen Updates für diesen Marketplace:
+
+1. Öffne `/plugin`.
+2. Wähle **Marketplaces** und dann `buzz-agent-comms`.
+3. Wähle **Enable auto-update**.
+
+Claude Code sucht beim Start im Hintergrund nach neuen Versionen. Ein bereits
+laufender Chat verwendet die geladene Version weiter, bis `/reload-plugins`
+ausgeführt oder Claude Code neu gestartet wurde.
 
 `/buzz-comms:buzz-setup` kopiert den Helper nach
 `~/.config/buzz-agent/bin/project-buzz`. Dadurch hängt die Laufzeit nicht vom
@@ -125,12 +157,49 @@ Plugin-Cache ab. Anschließend prüft dieser Befehl die Installation:
 ~/.config/buzz-agent/bin/project-buzz doctor
 ```
 
-Nach einem Plugin-Update zeigt `/buzz-comms:buzz-status`, ob diese stabile Kopie
-noch zum Plugin passt. Der zugrunde liegende Check ist:
+### Bestehende Installation aktualisieren
+
+Ist `buzz-agent-comms` bereits unter **Marketplaces** eingetragen, aktualisiere
+den vorhandenen Marketplace und das installierte Plugin getrennt:
+
+```text
+/plugin marketplace update buzz-agent-comms
+/plugin update buzz-comms@buzz-agent-comms
+/reload-plugins
+/buzz-comms:buzz-setup
+/buzz-comms:buzz-status
+```
+
+- `marketplace update` aktualisiert den Marketplace-Cache. Es ersetzt noch
+  nicht die installierte Plugin-Version.
+- `plugin update` installiert die aktuelle Plugin-Version aus dem aktualisierten
+  Marketplace.
+- `/reload-plugins` lädt diese Version in den laufenden Chat.
+- `buzz-setup` muss nach jedem Plugin-Update erneut laufen. Es kopiert den
+  aktuellen Helper aus dem Plugin-Cache nach
+  `~/.config/buzz-agent/bin/project-buzz`. Vorhandene Verzeichnisse unter
+  `~/.buzz/` oder `~/.config/buzz-agent/` ersetzen diesen Schritt nicht.
+- `buzz-status` prüft abschließend Plugin, Helper und Buzz-Zugang.
+
+Falls die Slash-Befehle in einer älteren Claude-Code-Version nicht verfügbar
+sind, aktualisiere zuerst Claude Code. Die entsprechenden Terminalbefehle der
+aktuellen Version lauten:
+
+```bash
+claude plugin marketplace update buzz-agent-comms
+claude plugin update buzz-comms@buzz-agent-comms
+```
+
+Ob die Kopie noch zum Plugin passt, zeigt `/buzz-comms:buzz-status`. Der zugrunde
+liegende Check ist:
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/scripts/project-buzz" install --check
 ```
+
+Erledigt ist die Aktualisierung, wenn `install --check` `"up_to_date": true` und
+`doctor` `"ok": true` meldet. Maßgeblich sind diese Ausgaben. Der öffentliche
+Marketplace kann seit einer Ankündigung mehrere Releases weitergelaufen sein.
 
 ## Git-Remotes und Beiträge
 
@@ -396,12 +465,31 @@ verschwinden.
 
 ## Windows
 
-Unter Windows den Helper nicht über seinen `python3`-Shebang starten. Das Setup
-erzeugt dafür einen Launcher:
+Unter Windows den Helper nicht über seinen `python3`-Shebang starten. CPython
+installiert dort nur `python.exe` und `pythonw.exe`. Ein Aufruf über `python3`
+trifft deshalb den Platzhalter aus dem Microsoft Store und bricht mit Exit 49 ab,
+obwohl Python installiert ist:
+
+```text
+Python wurde nicht gefunden; ohne Argumente ausführen, um aus dem
+Microsoft Store zu installieren ...
+```
+
+Das Setup erzeugt dafür einen Launcher:
 
 ```text
 python ~/.config/buzz-agent/bin/project-buzz <command>  # Git Bash
 project-buzz.cmd <command>                              # cmd oder PowerShell
+```
+
+Wer den Aufruf über den Shebang dauerhaft braucht, legt neben `python.exe` eine
+Kopie namens `python3.exe` an. Das Python-Verzeichnis liegt in `PATH` vor
+`WindowsApps` und gewinnt damit. Ein Wechsel der Python-Minorversion legt ein
+neues Verzeichnis an, in dem die Kopie wieder fehlt.
+
+```text
+copy "%LOCALAPPDATA%\Programs\Python\Python3XX\python.exe" ^
+     "%LOCALAPPDATA%\Programs\Python\Python3XX\python3.exe"
 ```
 
 Wenn die verdeckte Schlüsselabfrage unter Git Bash wegen mintty nicht erscheint,
@@ -445,3 +533,10 @@ Lizenzdatei liegt unverändert neben dem Skill unter
 Das danebenliegende `voice-profile.md` beschreibt ausschließlich den
 öffentlichen Stil für Buzz-Lifecycle-Texte. Private Schreibproben und
 persönliche Profile gehören nicht in dieses Repository.
+
+Der mitgelieferte Skill `ponytail-review` wurde aus
+[`DietrichGebert/ponytail`](https://github.com/DietrichGebert/ponytail) Version
+4.9.0, Commit
+`0a4dd63ad4541f4f655c4108a295916f3c1d8fda`, für diesen Entwicklungsvertrag
+angepasst. Er steht unter MIT. Die unveränderte Lizenz liegt unter
+`plugins/buzz-comms/skills/ponytail-review/LICENSE` und gehört zu jeder Kopie.

@@ -723,6 +723,52 @@ class PolicyContract(unittest.TestCase):
         )
         self.assertIn("| `engineering-contract` |", readme)
 
+    def test_simplicity_contract_and_ponytail_review_are_bounded(self):
+        skill_root = SCRIPTS.parent / "skills"
+        contract = (skill_root / "engineering-contract" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        ponytail = (skill_root / "ponytail-review" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        license_text = (skill_root / "ponytail-review" / "LICENSE").read_text(
+            encoding="utf-8"
+        )
+        command = (SCRIPTS.parent / "commands" / "ponytail-review.md").read_text(
+            encoding="utf-8"
+        )
+        readme = (SCRIPTS.parents[2] / "README.md").read_text(encoding="utf-8")
+
+        for phrase in (
+            "## Simplicity without under-building",
+            "smallest cohesive implementation",
+            "Line count and\nfile count are secondary",
+            "Never simplify away explicitly requested behavior",
+            "Use it only when the user explicitly asks",
+            "does not enable an\nalways-on mode",
+        ):
+            self.assertIn(phrase, contract)
+
+        for phrase in (
+            "one-shot, read-only review",
+            "Name the exact base and head commits",
+            "search the whole relevant tree for\ncallers and references",
+            "A symbol used only by tests is still used",
+            "Do not invent a line-savings total",
+            "0a4dd63ad4541f4f655c4108a295916f3c1d8fda",
+        ):
+            self.assertIn(phrase, ponytail)
+
+        self.assertNotIn("ACTIVE EVERY RESPONSE", ponytail)
+        self.assertNotIn("PONYTAIL_DEFAULT_MODE", ponytail)
+        self.assertIn("Copyright (c) 2026 DietrichGebert", license_text)
+        self.assertIn(
+            "${CLAUDE_PLUGIN_ROOT}/skills/ponytail-review/SKILL.md", command
+        )
+        self.assertIn("Do not persist a mode", command)
+        self.assertIn("| `ponytail-review` |", readme)
+        self.assertIn("/buzz-comms:ponytail-review", readme)
+
     def test_buzz_git_remote_contribution_rules_are_binding(self):
         """The rules that keep a forge-less contributor from silent failure.
 
@@ -864,6 +910,48 @@ class PolicyContract(unittest.TestCase):
         readme = (repository / "README.md").read_text(encoding="utf-8")
         self.assertIn("/buzz-comms:buzz-setup", readme)
         self.assertIn("/buzz-comms:buzz-status", readme)
+
+    def test_existing_installations_use_the_complete_update_path(self):
+        repository = SCRIPTS.parents[2]
+        readme = (repository / "README.md").read_text(encoding="utf-8")
+        setup = (SCRIPTS.parent / "commands" / "buzz-setup.md").read_text(
+            encoding="utf-8"
+        )
+        status = (SCRIPTS.parent / "commands" / "buzz-status.md").read_text(
+            encoding="utf-8"
+        )
+
+        installation = readme.split("## Installation", 1)[1].split(
+            "## Git-Remotes und Beiträge", 1
+        )[0]
+        update = installation.split("### Bestehende Installation aktualisieren", 1)[1]
+
+        self.assertEqual(1, installation.count("/plugin marketplace add"))
+        self.assertNotIn("/plugin marketplace add", update)
+        self.assertIn("Enable auto-update", installation)
+
+        update_steps = (
+            "/plugin marketplace update buzz-agent-comms",
+            "/plugin update buzz-comms@buzz-agent-comms",
+            "/reload-plugins",
+            "/buzz-comms:buzz-setup",
+            "/buzz-comms:buzz-status",
+        )
+        positions = [update.index(step) for step in update_steps]
+        self.assertEqual(sorted(positions), positions)
+
+        setup_steps = update_steps[:3]
+        positions = [setup.index(step) for step in setup_steps]
+        self.assertEqual(sorted(positions), positions)
+
+        positions = [status.index(step) for step in update_steps]
+        self.assertEqual(sorted(positions), positions)
+
+        for document in (update, setup, status):
+            self.assertIn('"up_to_date": true', document)
+
+        self.assertIn("claude plugin marketplace update buzz-agent-comms", update)
+        self.assertIn("claude plugin update buzz-comms@buzz-agent-comms", update)
 
     def test_relay_admission_is_documented_before_the_agent_identity(self):
         repository = SCRIPTS.parents[2]

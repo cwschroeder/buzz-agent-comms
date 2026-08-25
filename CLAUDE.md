@@ -67,10 +67,14 @@ plugins/buzz-comms/
 ├── skills/bro/                          # vendored MIT luchasarie/bro-skill
 │   ├── SKILL.md                         #   /bro: plain-language re-explainer
 │   └── LICENSE                          #   keep this file with any copy
+├── skills/ponytail-review/              # bounded over-engineering review
+│   ├── SKILL.md                         #   one-shot and read-only
+│   └── LICENSE                          #   MIT, DietrichGebert/ponytail
 ├── commands/
 │   ├── buzz-setup.md                    # /buzz-comms:buzz-setup: guided onboarding
 │   ├── buzz-status.md                   # /buzz-comms:buzz-status: read-only diagnostics
-│   └── bro.md                           # /bro: plain-language re-explainer
+│   ├── bro.md                           # /bro: plain-language re-explainer
+│   └── ponytail-review.md               # explicit simplification review
 ├── scripts/project-buzz                 # the deterministic helper (Python 3.8+)
 └── tests/test_project_buzz.py           # unittest suite, runs without a relay
 README.md                                # operator and colleague documentation (German)
@@ -103,8 +107,10 @@ Three policy surfaces and one mechanics layer have separate responsibilities:
 
 - **`skills/engineering-contract/SKILL.md`** holds the shared development
   contract: worktrees, contributor merge requests, maintainer-only merges and
-  deployments, infrastructure ownership, Impeccable UI work, and local AI for
-  customer data.
+  deployments, infrastructure ownership, cohesive simplicity, Impeccable UI
+  work, and local AI for customer data. The optional `ponytail-review` skill
+  inspects a requested diff for avoidable complexity without editing it or
+  replacing normal review gates.
 - **`skills/buzz-team-communication/SKILL.md` and the commands** hold the Buzz
   policy: when the agent must read the
   channel, what counts as delivery proof, what must never be published. This

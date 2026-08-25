@@ -4,9 +4,26 @@ description: Show Buzz reporting health and recent project-channel context
 
 Run the helper's diagnostics and show the user where they stand.
 
+If the user reports that the marketplace is registered but the installed plugin
+is old, explain that the marketplace cache and installed plugin are separate.
+Give this recovery sequence without executing it, because this command is
+read-only:
+
+```text
+/plugin marketplace update buzz-agent-comms
+/plugin update buzz-comms@buzz-agent-comms
+/reload-plugins
+/buzz-comms:buzz-setup
+/buzz-comms:buzz-status
+```
+
+Do not add an already registered marketplace again.
+
 1. Locate `${CLAUDE_PLUGIN_ROOT}/scripts/project-buzz` and run
    `install --check`. Report the plugin/helper version and whether the installed
-   helper is current. If the environment variable is unavailable, locate the
+   helper is current. A successful check must report `"up_to_date": true`. If
+   it does not, tell the user to run `/buzz-comms:buzz-setup` again. If the
+   environment variable is unavailable, locate the
    helper using the same search documented in `/buzz-comms:buzz-setup`.
 
 2. Run `~/.config/buzz-agent/bin/project-buzz doctor` and summarise the
