@@ -70,11 +70,14 @@ plugins/buzz-comms/
 ├── skills/ponytail-review/              # bounded over-engineering review
 │   ├── SKILL.md                         #   one-shot and read-only
 │   └── LICENSE                          #   MIT, DietrichGebert/ponytail
+├── skills/reflect/                      # session learnings into the project
+│   └── SKILL.md                         #   memory, append-only, on request
 ├── commands/
 │   ├── buzz-setup.md                    # /buzz-comms:buzz-setup: guided onboarding
 │   ├── buzz-status.md                   # /buzz-comms:buzz-status: read-only diagnostics
 │   ├── bro.md                           # /bro: plain-language re-explainer
-│   └── ponytail-review.md               # explicit simplification review
+│   ├── ponytail-review.md               # explicit simplification review
+│   └── reflect.md                       # /buzz-comms:reflect: session learnings
 ├── scripts/project-buzz                 # the deterministic helper (Python 3.8+)
 └── tests/test_project_buzz.py           # unittest suite, runs without a relay
 README.md                                # operator and colleague documentation (German)
@@ -119,6 +122,14 @@ Three policy surfaces and one mechanics layer have separate responsibilities:
   `show-me` adds one compact diagram when the update is clearer as a picture.
   `bro` rides along as a vendored general quality-of-life skill: `/bro`
   re-explains the previous answer in plain language, it has no lifecycle role.
+  `reflect` serves the `docs/LEARNINGS.md` duty that
+  `buzz-team-communication` already states: `/buzz-comms:reflect` proposes
+  dated entries for the session and appends them once the user confirms. It
+  ships without a hook and without a configuration file on purpose. `Stop`
+  fires after every assistant turn rather than at the end of a session, and
+  `SessionEnd` cannot hand anything back to the model, so an automatic variant
+  would reflect after every single answer on every colleague's machine. The
+  same reasoning kept modes and permanent hooks out of `ponytail-review`.
 - **`scripts/project-buzz`** holds the *mechanics*: identity, project resolution,
   marker construction, validation, deduplication, attachments. The agent is told
   to never bypass it (no direct `buzz messages send` for lifecycle text).

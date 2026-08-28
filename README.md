@@ -52,6 +52,10 @@ lokalen Helper für signierte, deduplizierte Buzz-Nachrichten.
   Projekt-Hauptordner (via `impeccable`), `docs/ARCHITECTURE.md` (via
   `c4-model-skill` and `arc42-documentation`), `docs/DEPLOYMENT.md` und
   `docs/LEARNINGS.md`.
+- Hält mit `/buzz-comms:reflect` fest, was eine Sitzung wirklich ergeben hat:
+  der Befehl schlägt datierte Einträge für `docs/LEARNINGS.md` vor und schreibt
+  sie erst nach Bestätigung, angehängt statt überschrieben. Kein Hook, keine
+  Konfigurationsdatei, kein Hintergrundmodus.
 - Verpflichtet eine Plain-Language-Prüfung vor jeder Veröffentlichung, damit
   auch Produktmanager und weniger technische Leser die Ergebnisse verstehen.
 - Führt einen Aufgaben-Tracker ein (`tasks/tasks.md`): eine Zeile pro Aufgabe
@@ -84,10 +88,12 @@ lokalen Helper für signierte, deduplizierte Buzz-Nachrichten.
 | `show-me` | Liefert kompakte Diagramme (ASCII, Mermaid, Diff, HTML) für Pläne, Änderungen und offene Threads |
 | `bro` | Erklärt die letzte Antwort in klarer Sprache neu (MIT, vendiert aus `luchasarie/bro-skill`) |
 | `ponytail-review` | Prüft einen Diff auf belegte, vermeidbare Komplexität (MIT, angepasst aus `DietrichGebert/ponytail`) |
+| `reflect` | Schlägt die Erkenntnisse einer Sitzung als datierte Einträge für `docs/LEARNINGS.md` vor und hängt sie nach Bestätigung an |
 | Guardrails | Plain-Language-Pflicht (/bro), Projekt-Doku-Satz (PRODUCT/DESIGN/ARCHITECTURE/DEPLOYMENT/LEARNINGS) und Aufgaben-Tracker (tasks/tasks.md), Datei-Bedeutung verankert in AGENTS.md/CLAUDE.md |
 | `scripts/project-buzz` | Portabler Python-Helper für Identität, Routing, Lifecycle und Anhänge |
 | `/buzz-comms:buzz-setup` | Geführte Einrichtung |
 | `/buzz-comms:buzz-status` | Read-only Diagnose, Versions- und Channel-Check |
+| `/buzz-comms:reflect` | Erkenntnisse der Sitzung nach Bestätigung in `docs/LEARNINGS.md` anhängen |
 
 Der Helper benötigt nur Python 3.8 oder neuer und die Python-Standardbibliothek.
 
