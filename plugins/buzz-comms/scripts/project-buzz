@@ -56,7 +56,7 @@ MARKER_RE = re.compile(
 CLOSING_PHASES = ("result", "blocked", "correction")
 
 MAX_CONTENT = 16000
-HELPER_VERSION = "0.22.0"
+HELPER_VERSION = "0.22.1"
 FORBIDDEN_IN_CONTENT = ("[PILOT-", "[AGENT-")
 LIFECYCLE_PHASES = ("start", "progress", "blocked", "result")
 GERMAN_ASCII_SUBSTITUTION_RE = re.compile(
@@ -658,9 +658,18 @@ def verify_auth_tag(auth_tag_json: str, agent_public_key: str) -> Optional[str]:
 
 
 def run_buzz(
-    config: Dict[str, Any], args: List[str], identity: Optional[Dict[str, str]] = None
+    config: Dict[str, Any],
+    args: List[str],
+    identity: Optional[Dict[str, str]] = None,
+    stdin_text: Optional[str] = None,
 ) -> str:
-    """Run the buzz CLI with the agent identity. Returns stdout."""
+    """Run the buzz CLI with the agent identity. Returns stdout.
+
+    Message text goes in through `stdin_text` with `--content -`, never as an
+    argv value. Windows caps a command line at roughly 8000 characters, so a
+    long post passed as an argument dies with "The command line is too long"
+    before it ever reaches the relay.
+    """
     binary = resolve_binary(config, "buzz_bin", "buzz")
     if identity is None:
         identity = load_identity()
@@ -672,6 +681,7 @@ def run_buzz(
         completed = subprocess.run(
             [binary] + args,
             env=environment,
+            input=stdin_text,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             universal_newlines=True,
@@ -985,13 +995,14 @@ def publish(
         "--channel",
         channel_id,
         "--content",
-        "{0} {1}".format(marker, content),
+        "-",
     ]
     if reply_to:
         args += ["--reply-to", reply_to]
+    payload = "{0} {1}".format(marker, content)
 
     try:
-        output = run_buzz(config, args)
+        output = run_buzz(config, args, stdin_text=payload)
     except Exception:
         # Keep the lock free so the documented same-ID retry can succeed.
         try:
@@ -1065,13 +1076,13 @@ def publish_attachments(
         "--channel",
         channel_id,
         "--content",
-        content,
+        "-",
     ]
     for path in resolved_files:
         args += ["--file", str(path)]
 
     try:
-        output = run_buzz(config, args)
+        output = run_buzz(config, args, stdin_text=content)
     except Exception:
         try:
             lock.rmdir()

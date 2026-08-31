@@ -74,3 +74,14 @@ benennen den Eintrag, den sie richtigstellen. Nichts wird gelöscht.
   und geteilt. Eine Grenze gehört immer zusammen mit der Anweisung, was
   stattdessen geschieht: kürzen oder anhängen, niemals über mehrere Events
   verteilen.
+- (claude) Die angehobene Grenze legte sofort einen zweiten Fehler frei, den
+  CI unter Windows fand: der Helfer übergab den Nachrichtentext als
+  Kommandozeilenargument, und Windows bricht dort bei rund 8000 Zeichen ab
+  ("The command line is too long"). Der Text geht jetzt über stdin, mit
+  `--content -`, was der `buzz`-CLI seit jeher unterstützt und wortgetreu
+  einliest. macOS erlaubt 1 MB Argumente, deshalb bleibt der Pilot-Helfer bei
+  der Argumentform; er läuft nirgends sonst. Wer die beiden Seiten angleichen
+  will, muss die stille Zeilenumbruch-Falle beachten: eine Bash-Here-String
+  hängt ein Newline an und verändert damit den veröffentlichten Text.
+- (claude) Eine Grenze anzuheben heißt, den Weg dahinter neu zu prüfen. Der
+  alte Wert hatte den Argument-Fehler acht Monate lang verdeckt.

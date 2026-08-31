@@ -37,9 +37,20 @@ _loader.exec_module(project_buzz)
 
 FAKE_BUZZ = """#!/usr/bin/env python3
 import json, os, sys
+argv = sys.argv[1:]
+# The helper sends message text on stdin as "--content -" so a long post does
+# not hit the Windows command-line limit. Log the resolved text in its place,
+# so assertions keep reading the content they always read.
+if "--content" in argv:
+    index = argv.index("--content") + 1
+    if index < len(argv) and argv[index] == "-":
+        argv[index] = sys.stdin.read()
+    elif os.environ.get("FAKE_BUZZ_REQUIRE_STDIN") == "1":
+        sys.stderr.write("content was passed as an argument, not on stdin\\n")
+        sys.exit(3)
 log = os.environ["FAKE_BUZZ_LOG"]
 with open(log, "a", encoding="utf-8") as handle:
-    handle.write(json.dumps(sys.argv[1:]) + "\\n")
+    handle.write(json.dumps(argv) + "\\n")
 sleep_sec = os.environ.get("FAKE_BUZZ_SLEEP")
 if sleep_sec:
     import time
@@ -121,6 +132,7 @@ class HelperTestCase(unittest.TestCase):
         os.environ.pop("FAKE_BUZZ_MEMBERSHIP_DENIED", None)
         os.environ.pop("FAKE_BUZZ_SLEEP", None)
         os.environ.pop("FAKE_BUZZ_MESSAGES", None)
+        os.environ.pop("FAKE_BUZZ_REQUIRE_STDIN", None)
         self.addCleanup(os.environ.pop, "BUZZ_AGENT_HOME", None)
         self.addCleanup(os.environ.pop, "FAKE_BUZZ_LOG", None)
         self.addCleanup(os.environ.pop, "FAKE_BUZZ_BAD_PROFILES", None)
@@ -253,6 +265,21 @@ class ContentValidation(HelperTestCase):
 
     def test_maximum_length_content_is_accepted(self):
         self.assertEqual(0, self.run_cli(["start", "u-1", "x" * 16000]))
+
+    def test_message_text_never_travels_as_a_command_line_argument(self):
+        """Windows caps a command line near 8000 characters.
+
+        A 16000 character post passed as an argv value dies there with "The
+        command line is too long" before it reaches the relay, which is how CI
+        caught it. The text has to go in on stdin as `--content -`.
+        """
+        os.environ["FAKE_BUZZ_REQUIRE_STDIN"] = "1"
+        self.addCleanup(os.environ.pop, "FAKE_BUZZ_REQUIRE_STDIN", None)
+
+        self.assertEqual(0, self.run_cli(["start", "u-1", "x" * 16000]))
+        sends = [call for call in self.calls() if call[:2] == ["messages", "send"]]
+        self.assertEqual(1, len(sends))
+        self.assertIn("x" * 16000, sends[0][sends[0].index("--content") + 1])
 
     def test_mention_is_rejected(self):
         self.assertEqual(1, self.run_cli(["start", "u-1", "ping @firstmate"]))
