@@ -205,7 +205,7 @@ change these without changing the owner side in lockstep:
   `[AGENT-RESULT:<agent>:<id>]`. Note that `start` maps to `started` and
   `correction` is a closing phase like `result` and `blocked` (posted
   top-level, supersedes an earlier event).
-- **Content validation.** Caller content is 1 to 4000 characters and cannot
+- **Content validation.** Caller content is 1 to 16000 characters and cannot
   contain `[PILOT-` or `[AGENT-`. Before publishing text with an at-sign, the
   helper resolves current channel profiles and rejects only real identity
   mentions outside code regions. If profiles cannot be resolved, it fails

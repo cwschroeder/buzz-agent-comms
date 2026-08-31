@@ -46,3 +46,31 @@ benennen den Eintrag, den sie richtigstellen. Nichts wird gelöscht.
   `claude plugin validate` meldet das nicht, es prüft nur die Manifeste.
   Beim Vendieren jedes SKILL.md-Frontmatter einzeln gegen einen YAML-Parser
   laufen lassen, sonst registriert sich der Skill beim Kollegen womöglich nie.
+
+## 2026-08-31 - Falle beim Nachführen des öffentlichen Spiegels
+
+- (claude) Die Historie des GitHub-Spiegels ist mit der internen nicht
+  verwandt, weil er aus Squash-Pushes entstanden ist. `git merge --squash main`
+  verweigert deshalb den Dienst ("refusing to merge unrelated histories"), und
+  `git restore --source=main -- .` legt die neuen Dateien nicht an, es fasst
+  nur bereits bekannte Pfade an. Der Weg, der trägt: Zweig von `FETCH_HEAD`
+  des öffentlichen `main`, dann `git checkout main -- .`, dann
+  `git diff main --exit-code` als Beweis, dass der Baum inhaltlich identisch
+  ist. Erst danach committen und mit der URL pushen.
+
+## 2026-08-31 - Die Zeichengrenze war unsere eigene, nicht die von Buzz
+
+- (claude) Ein Kollege meldete, sein Agent habe eine Lebenszyklus-Meldung
+  wegen der 4000-Zeichen-Grenze aufgeteilt, was im Kanal unlesbar aussah. Die
+  Grenze stammte aus keinem Protokoll: das Relay nimmt 256 KB Inhalt pro Event
+  (`crates/buzz-relay/src/handlers/ingest.rs`), die laufende NIP-11-Auskunft
+  meldet `max_message_length: 524288`, und im Desktop-Client kürzt nichts den
+  Nachrichtentext. Die 4000 standen nur in den beiden Helfern und kamen mit dem
+  ersten Plugin-Commit ohne Begründung herein. Jetzt 16000, im Gleichschritt
+  beider Seiten.
+- (claude) Eine harte Grenze ohne Ausweichregel erzeugt genau diesen Schaden.
+  Der Skill sagte nur „Keep messages under 4000 characters" und nichts darüber,
+  was bei Überschreitung zu tun ist, also hat der Agent das Naheliegende getan
+  und geteilt. Eine Grenze gehört immer zusammen mit der Anweisung, was
+  stattdessen geschieht: kürzen oder anhängen, niemals über mehrere Events
+  verteilen.

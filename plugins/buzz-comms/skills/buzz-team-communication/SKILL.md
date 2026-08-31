@@ -284,7 +284,14 @@ Before every `start`, `progress`, `blocked`, or `result` publication:
   paths, and commands, or inside URLs and quoted source text.
 - Use compact Markdown with short paragraphs, meaningful headings or lists, and
   no runs of blank lines.
-- Keep messages under 4000 characters.
+- Keep messages under 16000 characters. **Never split a lifecycle message
+  across several events to get under it.** A thread carries exactly one
+  closing result, so a split result splits the audit history too, and the
+  channel shows a run of fragments instead of one readable post. If a message
+  does not fit, it is too long for a channel: shorten it to the result and its
+  evidence. When the long detail genuinely has to survive, write it to a file
+  and attach that with `project-buzz attach`, then keep the lifecycle text
+  short and name the attachment.
 - Treat Buzz as communication and audit history, not as a task queue.
 - Skip purely conversational acknowledgements and any task that does not inspect
   or operate on a registered project.

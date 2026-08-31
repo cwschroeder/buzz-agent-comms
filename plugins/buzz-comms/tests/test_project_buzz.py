@@ -248,11 +248,11 @@ class ContentValidation(HelperTestCase):
         self.assertEqual([], self.calls())
 
     def test_overlong_content_is_rejected(self):
-        self.assertEqual(1, self.run_cli(["start", "u-1", "x" * 4001]))
+        self.assertEqual(1, self.run_cli(["start", "u-1", "x" * 16001]))
         self.assertEqual([], self.calls())
 
     def test_maximum_length_content_is_accepted(self):
-        self.assertEqual(0, self.run_cli(["start", "u-1", "x" * 4000]))
+        self.assertEqual(0, self.run_cli(["start", "u-1", "x" * 16000]))
 
     def test_mention_is_rejected(self):
         self.assertEqual(1, self.run_cli(["start", "u-1", "ping @firstmate"]))
@@ -674,6 +674,25 @@ class PolicyContract(unittest.TestCase):
             "before the final user response",
         ):
             self.assertIn(phrase, skill)
+
+    def test_skill_states_the_real_limit_and_forbids_splitting(self):
+        """The character cap the skill names must be the one the helper enforces.
+
+        A colleague's agent split a lifecycle result to get under the old cap,
+        which broke the one-result-per-thread rule and made the channel
+        unreadable. The skill has to carry both the correct number and the
+        instruction not to split.
+        """
+        skill = (
+            SCRIPTS.parent / "skills" / "buzz-team-communication" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "under {0} characters".format(project_buzz.MAX_CONTENT), skill
+        )
+        self.assertNotIn("under 4000 characters", skill)
+        self.assertIn("Never split a lifecycle message", skill)
+        self.assertIn("project-buzz attach", skill)
 
     def test_buzz_publication_explicitly_loads_german_no_ai_slop_checks(self):
         skill_root = SCRIPTS.parent / "skills"
