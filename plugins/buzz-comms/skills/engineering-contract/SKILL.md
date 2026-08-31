@@ -1,7 +1,8 @@
 ---
 name: engineering-contract
 description: >-
-  Enforce the shared development contract for project work: dedicated Git
+  Enforce the shared development contract for project work: the twelve rules of
+  working discipline, dedicated Git
   worktrees, contributor-owned branches and merge requests, maintainer-only
   merges, deployments and infrastructure changes, contributing over the Buzz
   git remote, cohesive simplicity, security rules that hold in a diff,
@@ -28,6 +29,43 @@ Determine the acting role before the first mutation:
   a deployment command do not establish maintainer authority.
 - If the role is unclear and the next action would merge, deploy, or change
   infrastructure, stop and ask for an explicit designation.
+
+## Working discipline
+
+Twelve rules for the work itself. They are short on purpose; each one names a
+failure that costs a colleague time when it is skipped.
+
+1. **State assumptions, do not guess.** Name an assumption before writing code
+   that depends on it. An ambiguous requirement gets raised, not silently
+   resolved in one direction.
+2. **Simplicity first.** The minimal code that solves the task. No speculative
+   abstraction and nothing built "for later flexibility". The next section
+   defines how to measure this.
+3. **Surgical changes.** Touch only what the task requires. Do not improve
+   neighbouring code unasked; it hides the real change in the diff.
+4. **Define done before starting.** State the success criteria, then verify
+   against them before reporting completion. Neither stop early nor loop
+   without a target.
+5. **Code for the deterministic part, the model for judgement.** Use the model
+   for classification, drafting, summarising, and extraction. Routing, retries,
+   status codes, and deterministic transforms belong in code. If code can
+   answer it, code answers it.
+6. **Stay brief.** Short, dense output. Do not repeat a rejected fix and do not
+   re-derive facts already established.
+7. **Surface conflicts instead of averaging them.** Two competing patterns in
+   the codebase: pick one and say why. Silently mixing them hides the defect.
+8. **Read before writing.** Read the exports, the callers, and the shared
+   utilities first. Never place a function next to an identical one you have
+   not read.
+9. **Tests assert intent.** A test that stays green while the logic is wrong is
+   broken. Assert behaviour that fails when the contract breaks.
+10. **Verify each step before building on it.** Do not stack step six on an
+    unverified step four. Check at meaningful boundaries.
+11. **Match the codebase conventions.** Adopt its structure, naming, and test
+    style. Do not quietly fork into a different paradigm.
+12. **Fail loudly.** Report uncertainty and partial failures. "Succeeded" while
+    silently skipping fourteen percent of the records is the worst class of
+    bug.
 
 ## Simplicity without under-building
 

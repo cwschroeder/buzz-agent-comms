@@ -191,7 +191,7 @@ convention); the rest lives under `docs/`: the set is:
 |---|---|---|
 | `PRODUCT.md` (root) | Product/business contract: audience, goals, non-goals, scope; at the project root per impeccable | `impeccable` |
 | `DESIGN.md` (root) | Shipped design system: tokens and named rules from the artifact; at the project root per impeccable | `impeccable` |
-| `docs/ARCHITECTURE.md` | Software architecture in C4 + arc42 shape | `c4-model-skill`, `arc42-documentation` |
+| `docs/ARCHITECTURE.md` | Software architecture in C4 + arc42 shape | `c4-model`, `arc42-documentation` |
 | `docs/DEPLOYMENT.md` | Concrete runbook: how builds ship, canonical runtime, exact commit/build, rollback, who deploys | whoever deploys |
 | `docs/LEARNINGS.md` | Durable cross-agent memory of the project | every agent |
 | `tasks/tasks.md` | Task backlog + working status; complex tasks link a subfolder `tasks/<aufgabe>/` | every agent |
@@ -201,9 +201,10 @@ convention); the rest lives under `docs/`: the set is:
   it to `/docs` and merges content. There is no `doc/` variant anywhere in
   the set.
 
-- `ARCHITECTURE.md` is built with `c4-model-skill` (Simon Brown's C4 model:
+- `ARCHITECTURE.md` is built with `c4-model` (Simon Brown's C4 model:
   Context and Container levels cover most teams; go deeper only on request)
-  and `arc42-documentation` (Melodic-arc42, the 12-section arc42 template).
+  and `arc42-documentation` (the 12-section arc42 template). Both ship with
+  this plugin, so neither needs a separate installation.
 - `DESIGN.md` and `PRODUCT.md` (project root) follow `impeccable`: PRODUCT.md is the product
   contract, DESIGN.md records the system that actually shipped, written from
   the artifact, never from intentions.

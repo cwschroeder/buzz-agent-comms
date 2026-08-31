@@ -23,3 +23,26 @@ benennen den Eintrag, den sie richtigstellen. Nichts wird gelöscht.
   und `plugins[0].version` in `marketplace.json`. Der Test
   `test_helper_version_matches_both_manifests` vergleicht alle drei gegen die
   Helper-Konstante.
+
+## 2026-08-31 - Ein Vertrag darf nur nennen, was er auch liefert
+
+- (claude) `buzz-team-communication` schrieb `c4-model-skill` und
+  `arc42-documentation` als Eigentümer von `docs/ARCHITECTURE.md` vor, ohne
+  beide auszuliefern. Zusätzlich existiert kein Skill namens
+  `c4-model-skill`; er heißt `c4-model`. Wer der Anweisung folgte, suchte
+  einen Namen, den es nirgends gibt. Regel daraus: Ein Vertrag nennt entweder
+  einen mitgelieferten Skill oder eine Voraussetzung mit Installationsweg,
+  nie einen Namen ohne Bezugsquelle.
+- (claude) Vor dem Vendieren prüfen, ob die lokale Kopie vollständig ist. Die
+  Fassung unter den Agenten-Skills bestand nur aus `SKILL.md` und `LICENSE`,
+  während die `SKILL.md` zehn Begleitdateien per `Read` einbindet. Vollständig
+  lag sie an anderer Stelle. Ein Ausschnitt hätte den Fehler nur verschoben.
+- (claude) Vendierte Fremd-Skills können eigene Abhängigkeiten mitbringen, die
+  hier niemand hat. `arc42-documentation` verlangte einen `docs-management`-Skill
+  und einen Perplexity-MCP-Server. Solche Zeilen gehören beim Vendieren
+  ersetzt, und die Änderung gehört in die Herkunftsangabe.
+- (claude) Das Frontmatter des vendierten `c4-model` war ungültiges YAML: die
+  `description` stand unquotiert in einer Zeile und enthielt Doppelpunkte.
+  `claude plugin validate` meldet das nicht, es prüft nur die Manifeste.
+  Beim Vendieren jedes SKILL.md-Frontmatter einzeln gegen einen YAML-Parser
+  laufen lassen, sonst registriert sich der Skill beim Kollegen womöglich nie.

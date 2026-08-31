@@ -14,6 +14,10 @@ lokalen Helper für signierte, deduplizierte Buzz-Nachrichten.
 
 - Liest vor Projektarbeit die letzten Channel-Nachrichten und berücksichtigt
   parallele Arbeit, aktive Worktrees, Review-Gates und offene Blocker.
+- Gibt zwölf kurze Regeln für die Arbeit selbst vor: Annahmen benennen statt
+  raten, chirurgische Änderungen, Erfolgskriterien vor dem Start, lesen vor
+  schreiben, Tests prüfen Absicht, jeden Schritt verifizieren, Konflikte
+  sichtbar machen, laut scheitern.
 - Verlangt für jede Implementierung einen eigenen Git-Worktree und eine
   aufgabenspezifische Branch. Beitragende pushen ihre Branch und erstellen einen
   Merge Request.
@@ -50,12 +54,17 @@ lokalen Helper für signierte, deduplizierte Buzz-Nachrichten.
   `/bro` sie in klarer Sprache neu, gleiche Sprache, alle Fakten wortwörtlich.
 - Legt Projekt-Doku-Guardrails fest: `PRODUCT.md` und `DESIGN.md` im
   Projekt-Hauptordner (via `impeccable`), `docs/ARCHITECTURE.md` (via
-  `c4-model-skill` and `arc42-documentation`), `docs/DEPLOYMENT.md` und
-  `docs/LEARNINGS.md`.
+  `c4-model` und `arc42-documentation`), `docs/DEPLOYMENT.md` und
+  `docs/LEARNINGS.md`. Die beiden Architektur-Skills liegen im Plugin, sie
+  müssen nicht getrennt installiert werden.
 - Hält mit `/buzz-comms:reflect` fest, was eine Sitzung wirklich ergeben hat:
   der Befehl schlägt datierte Einträge für `docs/LEARNINGS.md` vor und schreibt
   sie erst nach Bestätigung, angehängt statt überschrieben. Kein Hook, keine
   Konfigurationsdatei, kein Hintergrundmodus.
+- Sichert mit `/buzz-comms:handoff` den Sitzungsstand, bevor der Kontext
+  kompaktiert wird oder die Sitzung endet: Stand, Offenes, Fallen und Belege
+  in einer Notiz außerhalb des Repositories. Die Notiz nimmt bewusst nichts
+  auf, was ins Projektgedächtnis oder in den Aufgaben-Tracker gehört.
 - Verpflichtet eine Plain-Language-Prüfung vor jeder Veröffentlichung, damit
   auch Produktmanager und weniger technische Leser die Ergebnisse verstehen.
 - Führt einen Aufgaben-Tracker ein (`tasks/tasks.md`): eine Zeile pro Aufgabe
@@ -82,18 +91,22 @@ lokalen Helper für signierte, deduplizierte Buzz-Nachrichten.
 
 | Komponente | Aufgabe |
 |---|---|
-| `engineering-contract` | Worktrees, Merge Requests, Maintainer-Rollen, Beiträge über das Buzz-Git-Remote, prüfbare Sicherheitsregeln, Impeccable und lokale KI bei Kundendaten |
+| `engineering-contract` | Zwölf Regeln der Arbeitsdisziplin, Worktrees, Merge Requests, Maintainer-Rollen, Beiträge über das Buzz-Git-Remote, prüfbare Sicherheitsregeln, Impeccable und lokale KI bei Kundendaten |
 | `buzz-team-communication` | Verbindlicher Kommunikations- und Delivery-Proof-Workflow |
 | `no-ai-slop` | Redigiert jeden Lifecycle-Text, bevor er im Kanal landet |
 | `show-me` | Liefert kompakte Diagramme (ASCII, Mermaid, Diff, HTML) für Pläne, Änderungen und offene Threads |
 | `bro` | Erklärt die letzte Antwort in klarer Sprache neu (MIT, vendiert aus `luchasarie/bro-skill`) |
 | `ponytail-review` | Prüft einen Diff auf belegte, vermeidbare Komplexität (MIT, angepasst aus `DietrichGebert/ponytail`) |
+| `c4-model` | Baut `docs/ARCHITECTURE.md` nach Simon Browns C4-Modell (MIT, vendiert, Cherif Toujeni) |
+| `arc42-documentation` | Liefert die zwölf arc42-Abschnitte für `docs/ARCHITECTURE.md` (MIT, vendiert, Melodic Software) |
 | `reflect` | Schlägt die Erkenntnisse einer Sitzung als datierte Einträge für `docs/LEARNINGS.md` vor und hängt sie nach Bestätigung an |
+| `handoff` | Schreibt vor Sitzungsende oder Kontext-Kompaktierung eine Übergabenotiz für die nächste Sitzung |
 | Guardrails | Plain-Language-Pflicht (/bro), Projekt-Doku-Satz (PRODUCT/DESIGN/ARCHITECTURE/DEPLOYMENT/LEARNINGS) und Aufgaben-Tracker (tasks/tasks.md), Datei-Bedeutung verankert in AGENTS.md/CLAUDE.md |
 | `scripts/project-buzz` | Portabler Python-Helper für Identität, Routing, Lifecycle und Anhänge |
 | `/buzz-comms:buzz-setup` | Geführte Einrichtung |
 | `/buzz-comms:buzz-status` | Read-only Diagnose, Versions- und Channel-Check |
 | `/buzz-comms:reflect` | Erkenntnisse der Sitzung nach Bestätigung in `docs/LEARNINGS.md` anhängen |
+| `/buzz-comms:handoff` | Übergabenotiz für die nächste Sitzung schreiben |
 
 Der Helper benötigt nur Python 3.8 oder neuer und die Python-Standardbibliothek.
 
@@ -228,7 +241,16 @@ Beiträge und Sicherheitsmeldungen laufen über die oben genannten privaten Wege
 ## Voraussetzungen
 
 - Claude Code mit Plugin-Unterstützung
-- Für UI-Arbeit ein installierter `impeccable`-Skill
+- Für UI-Arbeit der `impeccable`-Skill. Er ist zu groß, um mitgeliefert zu
+  werden, und kommt aus dem npm-Paket gleichen Namens (Apache 2.0,
+  [`impeccable.style`](https://impeccable.style)):
+
+  ```bash
+  npx impeccable
+  ```
+
+  Eine vorhandene Installation aktualisiert `npx impeccable update`. Ohne den
+  Skill darf der Agent laut Vertrag keine Oberfläche verändern.
 - Python 3.8 oder neuer
 - Eine erreichbare Buzz-Relay-Instanz
 - `buzz` für den laufenden Betrieb, das einzige benötigte Programm
@@ -250,6 +272,24 @@ der Standardbibliothek von Python. `buzz-admin` und `compute_auth_tag` braucht
 niemand mehr auf seinem Rechner. Ältere Konfigurationen dürfen die Einträge
 `buzz_admin_bin` und `auth_tag_bin` behalten, `doctor` weist einmal darauf hin,
 dass sie entfernt werden können.
+
+## Empfohlene Begleit-Plugins
+
+Dieses Plugin regelt Zusammenarbeit und Nachweis. Wie eine Aufgabe methodisch
+angegangen wird, deckt es nicht ab. Dafür empfiehlt sich Anthropics offizielles
+`superpowers`, das genau dort ansetzt: Brainstorming vor der ersten Zeile Code,
+systematische Fehlersuche vor dem ersten Fix, testgetriebene Entwicklung und
+eine Prüfung vor der Fertigmeldung.
+
+```text
+/plugin marketplace add anthropics/claude-plugins-official
+/plugin install superpowers@claude-plugins-official
+```
+
+Der Marketplace ist in vielen Installationen bereits eingetragen; dann genügt
+der zweite Befehl. Die Skills greifen ineinander: `superpowers` bestimmt das
+Vorgehen, der `engineering-contract` die Regeln, `buzz-team-communication` die
+Meldung im Kanal.
 
 ## Identitäts- und Berechtigungsmodell
 

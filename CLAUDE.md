@@ -72,12 +72,22 @@ plugins/buzz-comms/
 │   └── LICENSE                          #   MIT, DietrichGebert/ponytail
 ├── skills/reflect/                      # session learnings into the project
 │   └── SKILL.md                         #   memory, append-only, on request
+├── skills/handoff/                      # handover note before the context
+│   └── SKILL.md                         #   is compacted or the session ends
+├── skills/c4-model/                     # vendored MIT, Cherif Toujeni
+│   ├── SKILL.md                         #   C4 levels, modes, examples
+│   ├── LICENSE                          #   keep this file with any copy
+│   └── *.md                             #   mode and reference companions
+├── skills/arc42-documentation/          # vendored MIT, Melodic Software
+│   ├── SKILL.md                         #   the 12 arc42 sections
+│   └── LICENSE                          #   keep this file with any copy
 ├── commands/
 │   ├── buzz-setup.md                    # /buzz-comms:buzz-setup: guided onboarding
 │   ├── buzz-status.md                   # /buzz-comms:buzz-status: read-only diagnostics
 │   ├── bro.md                           # /bro: plain-language re-explainer
 │   ├── ponytail-review.md               # explicit simplification review
-│   └── reflect.md                       # /buzz-comms:reflect: session learnings
+│   ├── reflect.md                       # /buzz-comms:reflect: session learnings
+│   └── handoff.md                       # /buzz-comms:handoff: handover note
 ├── scripts/project-buzz                 # the deterministic helper (Python 3.8+)
 └── tests/test_project_buzz.py           # unittest suite, runs without a relay
 README.md                                # operator and colleague documentation (German)
@@ -130,6 +140,11 @@ Three policy surfaces and one mechanics layer have separate responsibilities:
   `SessionEnd` cannot hand anything back to the model, so an automatic variant
   would reflect after every single answer on every colleague's machine. The
   same reasoning kept modes and permanent hooks out of `ponytail-review`.
+  `handoff` covers the other half of session memory: `/buzz-comms:handoff`
+  writes what only the current session knows, outside the repository, before a
+  compaction takes it. Its skill states the boundary against
+  `docs/LEARNINGS.md`, `tasks/tasks.md` and the channel, so the four do not
+  become four competing memories.
 - **`scripts/project-buzz`** holds the *mechanics*: identity, project resolution,
   marker construction, validation, deduplication, attachments. The agent is told
   to never bypass it (no direct `buzz messages send` for lifecycle text).
