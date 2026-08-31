@@ -85,3 +85,16 @@ benennen den Eintrag, den sie richtigstellen. Nichts wird gelöscht.
   hängt ein Newline an und verändert damit den veröffentlichten Text.
 - (claude) Eine Grenze anzuheben heißt, den Weg dahinter neu zu prüfen. Der
   alte Wert hatte den Argument-Fehler acht Monate lang verdeckt.
+- (claude) Der Wechsel auf stdin war in 0.22.1 selbst noch fehlerhaft:
+  `subprocess.run(..., universal_newlines=True)` kodiert die Eingabe mit dem
+  bevorzugten Locale, unter Windows also der ANSI-Codepage. Ein `ü` geht dann
+  als einzelnes Byte 0xFC hinaus, und die `buzz`-CLI liest stdin als striktes
+  UTF-8 und bricht ab. Da jede deutsche Meldung Umlaute trägt, hätte das genau
+  die Nachrichten zerstört, die der Skill verlangt. Jetzt steht dort
+  `encoding="utf-8"`, was zugleich die Antwort der CLI korrekt dekodiert.
+  Nachgestellt auf macOS mit `LC_ALL=de_DE.ISO8859-1`.
+- (claude) Ein Test-Doppelgänger erbt den Fehler des Aufrufers. Die Fake-CLI
+  las stdin ebenfalls im Locale-Modus, also lief cp1252 hinaus und cp1252
+  wieder herein, und die Prüfung war blind. Sie liest jetzt Bytes und dekodiert
+  streng als UTF-8. Merksatz: an beiden Enden einer Pipe die Kodierung
+  festnageln, sonst prüft der Test nur, dass zwei gleiche Fehler sich aufheben.

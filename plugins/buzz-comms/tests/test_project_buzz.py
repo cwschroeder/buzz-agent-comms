@@ -44,7 +44,7 @@ argv = sys.argv[1:]
 if "--content" in argv:
     index = argv.index("--content") + 1
     if index < len(argv) and argv[index] == "-":
-        argv[index] = sys.stdin.read()
+        argv[index] = sys.stdin.buffer.read().decode("utf-8")
     elif os.environ.get("FAKE_BUZZ_REQUIRE_STDIN") == "1":
         sys.stderr.write("content was passed as an argument, not on stdin\\n")
         sys.exit(3)
@@ -265,6 +265,25 @@ class ContentValidation(HelperTestCase):
 
     def test_maximum_length_content_is_accepted(self):
         self.assertEqual(0, self.run_cli(["start", "u-1", "x" * 16000]))
+
+    def test_umlauts_survive_the_pipe_to_the_cli(self):
+        """The pipe must be UTF-8, not whatever the locale prefers.
+
+        Text mode encodes with `locale.getpreferredencoding()`, which on
+        Windows is the ANSI code page: `ü` leaves as the single byte 0xFC and
+        the CLI, which reads stdin as strict UTF-8, rejects it. Since every
+        German lifecycle message carries umlauts, the locale default would
+        break exactly the messages the skill requires.
+        """
+        content = "Grüße vom Prüfstand: die Straße heißt jetzt anders, größer und schöner."
+
+        self.assertEqual(0, self.run_cli(["start", "u-1", content]))
+        sends = [call for call in self.calls() if call[:2] == ["messages", "send"]]
+        self.assertEqual(1, len(sends))
+        published = sends[0][sends[0].index("--content") + 1]
+        self.assertIn(content, published)
+        self.assertIn("ü", published)
+        self.assertIn("ß", published)
 
     def test_message_text_never_travels_as_a_command_line_argument(self):
         """Windows caps a command line near 8000 characters.
