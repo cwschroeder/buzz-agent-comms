@@ -98,3 +98,33 @@ benennen den Eintrag, den sie richtigstellen. Nichts wird gelöscht.
   wieder herein, und die Prüfung war blind. Sie liest jetzt Bytes und dekodiert
   streng als UTF-8. Merksatz: an beiden Enden einer Pipe die Kodierung
   festnageln, sonst prüft der Test nur, dass zwei gleiche Fehler sich aufheben.
+
+## 2026-09-05 - Function Hooks von Claude Code: geprüft, nicht eingebaut
+
+- (claude) Function Hooks sind ein Vorschlag von Anthropic
+  (anthropics/claude-code#91870, 3. September 2026). Die Laufzeit steckt ab
+  2.1.260 hinter `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` und einem
+  Rollout-Schalter (`tengu_plugin_hooks_modules`), der standardmäßig aus ist.
+  `hooks/hooks.json` nennt unter `modules` ein TypeScript-Modul mit
+  `register(on, options)`; jeder Hook hat die Form `($, e, next)` und läuft
+  in-process in Bun. Die Typdeklarationen schreibt `/plugin-types`.
+- (claude) Gemessen auf 2.1.261 mit einem Probe-Plugin: `tool.call` mit
+  `{ deny }` blockiert einen Bash-Aufruf, `prompt.context` legt einen Block in
+  die erste Nachricht, `$.process.run(["python3", ...])` liefert die Ausgabe
+  des Kindprozesses zurück, `session.start` feuert. Ohne Flag lädt das Plugin
+  fehlerfrei und überspringt die Module still; ein werfender Hook wird
+  übersprungen, die Kette darunter läuft weiter. Beides ist fail-open.
+- (claude) `prompt.context` lief in jedem `-p`-Lauf zweimal. Ein Relay-Aufruf
+  in diesem Hook würde sich verdoppeln.
+- (claude) `turn.complete` kann die Antwort nicht anhalten, nur Text darunter
+  zeigen. Die Regel „genau ein `result` vor der letzten Antwort" kann nur ein
+  command-Hook auf `Stop` mit `decision: "block"` erzwingen. Deshalb bleibt
+  das Plugin ohne Function Hooks, bis Anthropic sie aus dem Early Access nimmt
+  und ein blockierendes Abschlussereignis existiert. Kandidaten für danach:
+  Kanalkontext über `prompt.context`, Verbot von direktem
+  `buzz messages send` über `tool.call`, `install --check` auf
+  `session.start`.
+- (claude) Das Flag lässt sich in `settings.json` unter `env` setzen; ein
+  Kollege bräuchte keinen Shell-Export. Das Windows-Problem der Shell-Hooks
+  entfällt für das Modul selbst, kommt aber mit
+  `$.process.run(["python3", ...])` zurück.

@@ -56,7 +56,7 @@ MARKER_RE = re.compile(
 CLOSING_PHASES = ("result", "blocked", "correction")
 
 MAX_CONTENT = 16000
-HELPER_VERSION = "0.22.2"
+HELPER_VERSION = "0.22.3"
 FORBIDDEN_IN_CONTENT = ("[PILOT-", "[AGENT-")
 LIFECYCLE_PHASES = ("start", "progress", "blocked", "result")
 GERMAN_ASCII_SUBSTITUTION_RE = re.compile(
@@ -1671,7 +1671,35 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def pin_output_encoding() -> None:
+    """Pin stdout and stderr to UTF-8 before any channel text is written.
+
+    Windows labels the console with the ANSI code page (cp1252 on a German
+    install) and Python encodes printed text with it. Channel content arrives
+    from the relay as UTF-8 and routinely carries characters outside cp1252
+    (arrows, check marks, warning signs). Writing those raised
+    UnicodeEncodeError and killed `context`, the one read the fail-closed
+    workflow requires before any work - so a colleague on Windows never
+    passed the gate and their agent stopped publishing lifecycle posts
+    entirely, while local commits continued silently.
+
+    The consumer of this output is a coding agent reading UTF-8, so UTF-8 is
+    the correct encoding for the stream regardless of the console behind it.
+    Streams that cannot be reconfigured (a StringIO in tests, a closed
+    stream) keep their old encoding; lifecycle output stays ASCII-safe.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            pass
+
+
 def main(argv: Optional[List[str]] = None) -> int:
+    pin_output_encoding()
     parser = build_parser()
     arguments = parser.parse_args(argv)
     if not getattr(arguments, "handler", None):

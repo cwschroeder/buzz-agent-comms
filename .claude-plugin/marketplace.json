@@ -5,13 +5,13 @@
   },
   "metadata": {
     "description": "Apply shared engineering rules, coordinate work in Buzz, and prove live delivery.",
-    "version": "0.22.2"
+    "version": "0.22.3"
   },
   "plugins": [
     {
       "name": "buzz-comms",
       "description": "Apply the engineering contract, coordinate work in Buzz, and prove delivery.",
-      "version": "0.22.2",
+      "version": "0.22.3",
       "author": {
         "name": "Christian Schröder"
       },

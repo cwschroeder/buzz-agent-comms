@@ -17,6 +17,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -77,7 +78,12 @@ elif sys.argv[1:5] == ["--format", "compact", "users", "get"]:
             {"pubkey": "d" * 64, "display_name": "CodeApp Repo-Agent"},
         ]))
 elif sys.argv[1:3] == ["messages", "get"]:
-    print(os.environ.get("FAKE_BUZZ_MESSAGES", "[]"))
+    # The real CLI is a binary that writes UTF-8 bytes whatever its locale;
+    # FAKE_BUZZ_MESSAGES may hold characters the invoking console cannot
+    # encode, so print() would die before the helper under test even runs.
+    sys.stdout.buffer.write(
+        os.environ.get("FAKE_BUZZ_MESSAGES", "[]").encode("utf-8")
+    )
 else:
     print(json.dumps({"accepted": True, "event_id": "a" * 64}))
 """
@@ -550,6 +556,59 @@ class ContextArguments(HelperTestCase):
     def test_limit_out_of_range_is_rejected(self):
         self.assertEqual(1, self.run_cli(["context", "500"]))
         self.assertEqual([], self.gets())
+
+
+class ConsoleEncoding(HelperTestCase):
+    """The helper must survive a console that cannot encode channel text.
+
+    Windows pins Python's stdout to the ANSI code page (cp1252 on a German
+    install). Channel content carries UTF-8 characters outside that page,
+    and a UnicodeEncodeError in `context` stops the fail-closed workflow
+    before it starts - the exact regression reported from a Windows
+    workplace on 2026-09-01. PYTHONIOENCODING reproduces that console on
+    any platform, pipes included.
+    """
+
+    def setUp(self):
+        super().setUp()
+        os.chdir(self.workspace)
+        # ensure_ascii=False: the real CLI is a binary that writes raw UTF-8,
+        # not \u-escaped ASCII - the escape would not exercise cp1252 at all.
+        os.environ["FAKE_BUZZ_MESSAGES"] = json.dumps(
+            [
+                {
+                    "content": "Netzwerkpfad MaaS → Headend ✓",
+                    "created_at": 1780000000,
+                    "id": "f" * 64,
+                    "kind": 9,
+                    "pubkey": "e" * 64,
+                    "sig": "0" * 128,
+                    "tags": [["h", "11111111-1111-1111-1111-111111111111"]],
+                }
+            ],
+            ensure_ascii=False,
+        )
+
+    def run_in_cp1252_console(self, *arguments):
+        environment = dict(os.environ)
+        environment["PYTHONIOENCODING"] = "cp1252"
+        return subprocess.run(
+            [sys.executable, str(SCRIPTS / "project-buzz")] + list(arguments),
+            cwd=str(self.workspace),
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=60,
+        )
+
+    def test_context_prints_channel_text_on_a_cp1252_console(self):
+        completed = self.run_in_cp1252_console("context")
+        self.assertEqual(
+            0, completed.returncode, completed.stderr.decode("utf-8", "replace")
+        )
+        self.assertIn(
+            "MaaS → Headend ✓", completed.stdout.decode("utf-8", "replace")
+        )
 
 
 class Registration(HelperTestCase):
