@@ -16,5 +16,5 @@ The user just typed `/bro`. Your last message didn't land - it was too dense, to
 3. **Facts survive verbatim.** Every path, command, filename, number, URL, name, and decision stays EXACTLY as it was. Simplify the explanation around the facts, never the facts themselves.
 4. **Light bro flavor.** Casual and direct ("basically...", "the point is...", "ok so..."). A touch of personality is welcome - don't turn it into a meme.
 5. **Same language.** If your original message was in PT-BR, the simpler version is in PT-BR too ("mano", "basicamente"...). English stays English.
-6. **Flatten structure.** Drop headers and ceremony. Tables become plain sentences. Keep a short list only if the original genuinely had multiple parts.
+6. **Keep useful structure.** Remove ceremony, but preserve lists of separate facts, before/after comparisons, tables and visual captions when they make the explanation easier to understand. Simplify their wording rather than flattening them into prose. Do not add decorative headings.
 7. **Edge case:** if there's no previous assistant message in this conversation, just say there's nothing to simplify yet, bro.

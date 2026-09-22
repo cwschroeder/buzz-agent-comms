@@ -63,7 +63,7 @@ plugins/buzz-comms/
 │   ├── eval.md                          #   the post-edit checklist
 │   └── LICENSE                          #   keep this file with any copy
 ├── skills/show-me/                      # compact visuals for channel posts
-│   └── SKILL.md                         #   ASCII, Mermaid, diffs, HTML preview
+│   └── SKILL.md                         #   comparisons and rendered media
 ├── skills/bro/                          # vendored MIT luchasarie/bro-skill
 │   ├── SKILL.md                         #   /bro: plain-language re-explainer
 │   └── LICENSE                          #   keep this file with any copy
@@ -129,7 +129,8 @@ Three policy surfaces and one mechanics layer have separate responsibilities:
   channel, what counts as delivery proof, what must never be published. This
   prose is the contract, so treat wording changes as behaviour changes. Two
   advisory skills shape every publication: `no-ai-slop` edits the prose, and
-  `show-me` adds one compact diagram when the update is clearer as a picture.
+  `show-me` selects comparisons, screenshots or rendered diagrams when they help
+  the reader. Preserve useful lists and tables in the plain-language edit.
   `bro` rides along as a vendored general quality-of-life skill: `/bro`
   re-explains the previous answer in plain language, it has no lifecycle role.
   `reflect` serves the `docs/LEARNINGS.md` duty that

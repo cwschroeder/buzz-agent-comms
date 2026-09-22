@@ -45,10 +45,13 @@ lokalen Helper für signierte, deduplizierte Buzz-Nachrichten.
   Event-ID im Abschlussresultat.
 - Erzwingt leserfertige, kompakte Buzz-Nachrichten mit echten deutschen
   Umlauten und ohne internes Reasoning oder Tool-Tagebücher.
-- Ergänzt Lebenszyklus-Meldungen bei Bedarf um genau ein kompaktes Diagramm
-  (ASCII-Struktur oder Mermaid im Code-Block, Diff, Call-Tree) aus dem
-  mitgelieferten `show-me`-Skill, damit Pläne, Änderungen und offene Threads
-  im Textkanal auch als Bild lesbar sind.
+- Erklärt in Ergebnisbeiträgen zuerst die konkrete Wirkung für den Leser und
+  nennt den Lieferstatus im ersten Absatz. Verhaltensänderungen zeigen Vorher
+  und Nachher am selben Fall; getrennte Änderungen stehen als kurze Liste.
+- Nutzt mit `show-me` passende Bildanhänge: vergleichbare Screenshots, gerenderte
+  Ablaufdiagramme oder echte Bildschirmaufnahmen. Archify und Higgsfield sind
+  optionale, getrennt installierte Werkzeuge. Generierte Konzepte sind als solche
+  gekennzeichnet und dienen nicht als Produktnachweis.
 - Bündelt den `/bro`-Skill (vendiert, MIT von
   `luchasarie/bro-skill`): Wenn eine letzte Antwort zu technisch war, erklärt
   `/bro` sie in klarer Sprache neu, gleiche Sprache, alle Fakten wortwörtlich.
@@ -94,7 +97,7 @@ lokalen Helper für signierte, deduplizierte Buzz-Nachrichten.
 | `engineering-contract` | Zwölf Regeln der Arbeitsdisziplin, Worktrees, Merge Requests, Maintainer-Rollen, Beiträge über das Buzz-Git-Remote, prüfbare Sicherheitsregeln, Impeccable und lokale KI bei Kundendaten |
 | `buzz-team-communication` | Verbindlicher Kommunikations- und Delivery-Proof-Workflow |
 | `no-ai-slop` | Redigiert jeden Lifecycle-Text, bevor er im Kanal landet |
-| `show-me` | Liefert kompakte Diagramme (ASCII, Mermaid, Diff, HTML) für Pläne, Änderungen und offene Threads |
+| `show-me` | Wählt Vergleiche, Screenshots, gerenderte Diagramme oder Aufnahmen; bietet Text-Fallbacks ohne zusätzliche Werkzeuge |
 | `bro` | Erklärt die letzte Antwort in klarer Sprache neu (MIT, vendiert aus `luchasarie/bro-skill`) |
 | `ponytail-review` | Prüft einen Diff auf belegte, vermeidbare Komplexität (MIT, angepasst aus `DietrichGebert/ponytail`) |
 | `c4-model` | Baut `docs/ARCHITECTURE.md` nach Simon Browns C4-Modell (MIT, vendiert, Cherif Toujeni) |
@@ -473,6 +476,10 @@ der Agent `blocked` beziehungsweise ausdrücklich "Nicht live".
 
 Für nicht visuelle Repository-Arbeit wird kein künstlicher Screenshot erzeugt.
 Dann dienen Test-, Commit- und Runtime-Status als Beleg.
+
+Musterbeiträge stehen in [examples.md](plugins/buzz-comms/skills/buzz-team-communication/examples.md).
+Die Verteilung an lokale Agents und Teaminstallationen beschreibt
+[COMMUNICATION-ROLLOUT.md](docs/COMMUNICATION-ROLLOUT.md).
 
 ## Helper-Kommandos
 

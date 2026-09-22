@@ -103,7 +103,7 @@ Oft leere Einleitungen sind: `Es ist wichtig zu betonen`, `Es ist erwähnenswert
 ## Deutsche Buzz-Texte
 
 - Schreibe echte Umlaute und `ß`. Veröffentliche keine Formen wie `fuer`, `fuenf`, `Naechster`, `Buendel`, `aendern` oder `pruefen` in normaler deutscher Prosa. Erhalte sie nur in Code, technischen Bezeichnern, Pfaden, Befehlen, URLs oder zitiertem Quelltext.
-- Streiche übersetzte KI-Einstiege und Rückblicke wie `Hier ist eine Übersicht`, `Es ist wichtig zu betonen`, `Zusammenfassend`, `Abschließend`, `Insgesamt lässt sich sagen` und `nicht nur X, sondern auch Y`. Beginne mit Status, Beleg, Blocker oder nächster Handlung.
+- Streiche übersetzte KI-Einstiege und Rückblicke wie `Hier ist eine Übersicht`, `Es ist wichtig zu betonen`, `Zusammenfassend`, `Abschließend`, `Insgesamt lässt sich sagen` und `nicht nur X, sondern auch Y`. Beginne mit der belegten Wirkung für den Leser oder dem Blocker; der Lieferstatus bleibt im ersten Absatz sichtbar. Erhalte hilfreiche Listen, Tabellen und Vorher/Nachher-Vergleiche.
 - Vermeide aufgeblähte Projektsprache wie `wichtiger Meilenstein`, `ganzheitlicher Ansatz`, `zukunftsweisend`, `unterstreicht die Bedeutung` und `zeigt eindrucksvoll`, sofern kein wörtliches Zitat sie verlangt.
 - Halte Lifecycle-Nachrichten kompakt. Verwandle einen Commit oder Planstand nicht in einen Mini-Bericht mit dekorativen Überschriften, symmetrischen Abschnitten oder einer Wiederholung am Ende.
 

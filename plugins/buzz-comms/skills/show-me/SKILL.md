@@ -1,87 +1,68 @@
 ---
 name: show-me
-description: Make a Buzz update easier to read with one compact diagram. Use before publishing a lifecycle update (start, progress, blocked, result, correct) whenever the plan, the change, the interaction, or the open-work shape is clearer as a picture than as prose, and whenever the user wants a concept shown visually.
+description: Make Buzz updates concrete with before/after comparisons, useful lists, screenshots, rendered diagrams or short recordings. Use before substantive result posts and whenever the user wants a change or concept shown visually.
 ---
 
 # Show Me
 
-Skip the preamble and keep prose brief. Pick the smallest view that makes the
-point clear, then place it next to the one or two sentences it supports.
+Choose the smallest view that makes the change understandable. Lead the caption
+with what the reader should notice. Keep the post readable without opening media.
+Do not force an image into a start message or a minor status update.
 
-Buzz renders fenced code blocks as plain text. Every visual must survive
-without images, so prefer ASCII structures and Mermaid inside fenced blocks.
-Use a focused HTML file only for a local preview you open yourself, or render
-it and attach the result as a PNG. Never put a bare `file://` link in a Buzz
-post.
+## Choose the format
 
-## When to use it in the channel
+| What the reader needs | Format |
+|---|---|
+| Several independent changes | Short list, one effect per item |
+| Old and new behavior | Same-case before/after comparison |
+| Visible UI change | Matched screenshots with clear Before / After labels |
+| Process, dependency or architecture | Rendered diagram; use installed `archify` when available |
+| Measured performance or quality | Small table or chart with units and test conditions |
+| Multi-step interaction | Short recording of the real application |
+| Proposed behavior or explanatory concept | Clearly labelled concept illustration or animation |
 
-- `start` or `progress`: the shape of the plan, the steps, the ownership.
-- `result`: what changed, or the verified flow from request to evidence.
-- `correct`: what the retracted claim said and what now holds instead.
-- `open`: the open-thread shape instead of a scrolling list.
+## Before and after
 
-## Visuals that survive a text-only channel
+Compare the same task, data, viewport, zoom and crop where practical. Identify
+versions or capture times when they matter. Explain the one change the reader
+should see. A pair is one visual unit, whether composed into one image or attached
+as two labelled files. On mobile, stack the pair if side-by-side text becomes tiny.
 
-Show logic or an algorithm as pseudocode:
+If no trustworthy old capture exists, show the current state and describe only
+the evidenced earlier behavior in text. Never generate or reconstruct a screenshot
+and present it as proof of the old or new application.
 
-```text
-on(open)
-  group messages by thread root
-  if thread has any of result, blocked, correction
-    close it
-  else
-    list it as open
-```
+## Diagrams and optional tools
 
-Show control flow as a call tree, or a plan as numbered steps:
+For a meaningful flow or architecture change, use the installed `archify` skill:
+read its instructions, build from verified facts, validate, export a PNG and
+inspect its labels, arrows and readability. Attach the image; an interactive HTML
+file may accompany it, but a local `file://` URL is not a usable channel link.
 
-```text
-publish an update
-  validate content     (length, secrets, mentions, German)
-  build marker         (phase, agent, update id)
-  write lock guard
-  post to the channel
-  store dedup output
-```
+For a requested concept illustration or explanatory animation, an installed
+`higgsfield-generate` skill can help. Read its routing instructions and use its
+specialized skills when required. Label generated work `Concept` (German:
+`Konzept`) and keep it separate from product evidence. Follow the engineering
+contract for customer data and cloud processing. Do not automatically start paid
+generation for routine updates; respect the user's authorization and budget.
 
-Show structure as a component or file tree:
+These tools are optional and are not bundled with this plugin. If unavailable,
+use a truthful text comparison, a small table or a narrow fenced ASCII diagram.
+Do not auto-install tools, invent commands or claim an export succeeded.
+Mermaid source is useful for authoring, but do not assume Buzz renders it.
+If rendering is unavailable, prefer a readable text diagram over raw Mermaid.
 
-```text
-buzz-comms/
-├── scripts/project-buzz      # deterministic helper
-├── skills/buzz-team-communication/   # behavioural contract
-└── skills/show-me/           # compact visuals for posts
-```
+## Publish and check
 
-Show a component or state change as a diff against the known shape:
-
-```diff
-- group updates by update id
-+ group messages by thread root
-```
-
-Show interaction or data flow with Mermaid:
-
-```mermaid
-sequenceDiagram
-    participant Agent
-    participant Helper
-    participant Buzz
-    Agent->>Helper: project-buzz start <id>
-    Helper->>Helper: validate + build marker
-    Helper->>Buzz: post top-level marker
-```
-
-## Rules for the channel
-
-- Keep diagrams narrow, under 80 columns, and self-explanatory. A reader must
-  get the point without surrounding prose.
-- One visual per message. Do not stack several diagrams in one update.
-- Use real labels: the actual project, agent, and file names. No placeholder
-  "XXX" or "TODO" in a published picture.
-- Put ASCII block diagrams and Mermaid inside fenced code blocks only. A raw
-  ASCII block without fences is unreadable in the Buzz timeline.
-- HTML is a local preview or a PNG attachment, never a link inside a post.
-- Edit the caption around the visual with the `no-ai-slop` skill like any other
-  lifecycle text. The picture does not replace the prose; it sharpens it.
+- One focused visual unit per update is normally enough. Include additional views
+  when evidence requires them, such as desktop and mobile acceptance.
+- Inspect the actual export or recording, not just the source. Check crop,
+  legibility, labels and consistency with the caption.
+- Use real verified labels and measurements. Synthetic training examples belong
+  in documentation, not in posts claiming delivery.
+- Remove private data, credentials and unrelated content before upload.
+- Publish media top-level with the attachment workflow in
+  `buzz-team-communication`, then cite its event in the lifecycle result.
+- Keep text diagrams below 80 columns and inside fenced blocks.
+- Apply the public `no-ai-slop` profile and checklist to captions as well as prose.
+  Preserve useful lists and comparisons during the plain-language pass.

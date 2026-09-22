@@ -128,3 +128,17 @@ benennen den Eintrag, den sie richtigstellen. Nichts wird gelöscht.
   Kollege bräuchte keinen Shell-Export. Das Windows-Problem der Shell-Hooks
   entfällt für das Modul selbst, kommt aber mit
   `$.process.run(["python3", ...])` zurück.
+
+## 2026-09-21 - Anschauliche Projektupdates (codex)
+
+- Hilfreiche Listen und Tabellen müssen die Vereinfachung durch `/bro` überleben.
+  Die bisherige Anweisung zum Abflachen widersprach lesbaren Vergleichen.
+- Ergebnisbeiträge beginnen mit einer belegten Wirkung; der Lieferstatus bleibt
+  im ersten Absatz. Vorher/Nachher braucht denselben Fall und einen belegten
+  früheren Zustand. Fehlende Aufnahmen dürfen nicht als Nachweis rekonstruiert
+  werden.
+- Diagramme werden als geprüfte Bilder angehängt. Mermaid-Quelltext allein ist
+  kein gerendertes Diagramm. Optionale Medienwerkzeuge brauchen Text-Fallbacks.
+- Die Regelverteilung und das Verhalten in einer frischen Agent-Sitzung sind
+  getrennt zu prüfen. Eine Versionsnummer oder ein Dateiverweis belegt noch
+  keine aktualisierte Teaminstallation.

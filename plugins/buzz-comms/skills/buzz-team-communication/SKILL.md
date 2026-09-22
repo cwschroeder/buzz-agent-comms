@@ -165,21 +165,31 @@ Attachments are deliberately top-level; never move them into the collapsible
 lifecycle thread. Publish screenshot evidence after runtime verification and
 immediately before the lifecycle result, then send the final user response.
 
-## Visuals in the channel
+## Reader-first updates and visuals
 
-The channel is text-only: a fenced code block renders as plain text, so a
-compactly drawn ASCII structure or a Mermaid block survives in any client.
-Use the `show-me` skill that ships next to this one for the visual itself;
-these rules apply to every lifecycle publication:
+For substantive results, lead with the concrete change for the reader. Keep the
+verified delivery state in the first paragraph; start with `Nicht live` while
+delivery remains pending. Put technical evidence below the explanation, without
+dropping failures, limits, the canonical URL, commit/build or test evidence.
 
-- Add at most one visual per message, narrowed to under 80 columns, placed
-  next to the one or two sentences it supports.
-- Use real project, agent, and file names. No placeholder labels in a post.
-- ASCII block diagrams and Mermaid go inside fenced code blocks only.
-- HTML is for a local preview or a PNG attachment, never a bare `file://`
-  link inside a post.
-- The visual does not replace the prose: results still name the file, the
-  commit, and the measurement.
+- For behavior changes, show before and after for the same concrete case. If the
+  earlier state is unknown, say so instead of reconstructing evidence.
+- Use short lists for separate changes and tables for comparisons. A plain-language
+  edit must preserve structure that helps the reader.
+- Choose the smallest useful visual with the sibling `show-me` skill: comparable
+  screenshots for UI changes, a rendered diagram for a flow, a chart for measured
+  results, or a short real recording for an interaction.
+- Images go through the existing top-level attachment workflow. One focused visual
+  unit is usually enough; a before/after pair counts as one comparison.
+- Do not assume Mermaid renders in the client. Render a diagram to a checked image
+  when possible; use a narrow fenced text diagram as fallback.
+- Give each attachment a caption explaining what to notice. The message must still
+  be understandable without opening the image.
+- Start messages and minor progress updates can remain one sentence. Do not
+  manufacture diagrams, numbers or stories to fill a template.
+
+Read [examples.md](examples.md) when choosing a result format or checking a rewrite.
+Examples are synthetic teaching material, never facts to copy into a live post.
 
 ## Project documentation guardrails
 
@@ -245,11 +255,11 @@ Before every `start`, `progress`, `blocked`, or `result` publication:
    "Zusammenfassend", and "nicht nur ..., sondern auch ...".
 4. If the helper rejects German ASCII substitutions, fix the prose. Do not
    bypass the helper or disguise prose as code.
-5. Decide whether the update is clearer as a picture: the change shape
-   (diff), the plan (steps or call tree), the interaction (Mermaid), or the
-   open-work shape. If yes, draft one compact visual with the `show-me` skill
-   that ships next to this one and embed it as a fenced code block. One visual
-   per message, under 80 columns, next to the sentence it supports.
+5. Apply the reader-first rules above and the sibling `show-me` skill. Check that
+   the opening explains the concrete effect, a behavior change has a truthful
+   before/after comparison, and any visual has a useful caption. Choose a list,
+   table or image when it makes the facts easier to understand; preserve it in
+   the plain-language edit.
 6. Run a plain-language pass with the `bro` skill that ships next to this one:
    the audience is a person who may not know the project's internals (for
    example a product manager). Expand acronyms at first mention, explain

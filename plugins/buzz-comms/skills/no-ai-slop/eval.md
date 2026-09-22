@@ -27,7 +27,7 @@ Bei einer reinen Prüfung muss der Befund jedes gefundene Muster benennen, die b
 ## Stimme und Format
 
 1. Wurde bei Buzz-Lifecycle-Texten `voice-profile.md` gelesen und angewendet, ohne daraus zu zitieren?
-2. Beginnt der Text mit belegtem Umfang oder Status und ist die nächste Handlung oder der Blocker leicht zu finden?
+2. Beginnt der Text mit belegter Wirkung, Umfang oder Blocker, bleibt der Lieferstatus im ersten Absatz sichtbar und ist die nächste Handlung leicht zu finden?
 3. Passt die Form zu einem kompakten Projektupdate, statt eine Artikel- oder Marketingstruktur aufzuzwingen?
 4. Wurden beim Erstellen keine Fakten, Zusagen, Daten, Messwerte, URLs oder Laufzeitstände erfunden?
 
@@ -54,12 +54,22 @@ Bei einer reinen Prüfung muss der Befund jedes gefundene Muster benennen, die b
 
 ## Ergebnis und Korrektur
 
-1. Beginnt ein Ergebnis mit genau einem belegten Zustand: `Review-ready`, `Merged`, `Deployed` oder `Extern verifiziert`?
+1. Ist der belegte Zustand `Review-ready`, `Merged`, `Deployed` oder `Extern verifiziert` im ersten Absatz erkennbar, bei noch nicht ausgelieferten Änderungen mit `Nicht live` am Anfang? Bleiben reine Prüfungen und Entwürfe als solche erkennbar?
 2. Nennt eine Diagnose ihre Belegtiefe: was gemessen und womit es abgeglichen wurde, oder dass es sich um eine Einschätzung handelt?
 3. Ist jede Korrektur ein Top-Level-Beitrag, nennt das ersetzte Event und erklärt zuerst, welche vorherige Aussage falsch war?
 4. Enthält der Text keine Geheimnisse und klingt er nicht sicherer, als die Belege erlauben?
 
 ## Schlussprüfung
+
+Prüfe bei substanziellen Ergebnisbeiträgen zusätzlich:
+
+- Erklärt der erste Absatz eine konkrete Wirkung für den Leser?
+- Vergleicht eine Verhaltensänderung Vorher und Nachher am selben Fall, oder benennt der Text den fehlenden früheren Nachweis?
+- Sind getrennte Änderungen und Vergleiche durch passende Listen oder Tabellen leicht erfassbar?
+- Erklärt eine Bildunterschrift, worauf der Leser achten soll, und bleibt die Aussage ohne Bild verständlich?
+- Sind Konzeptbilder als solche gekennzeichnet und alle Zahlen, Screenshots und Lieferbehauptungen belegt?
+
+Kurze Start- und Statusmeldungen brauchen weder Vergleich noch Bild. Formatiere nach Inhalt; erzeuge keine Beispiele oder Messwerte, um die Prüfung zu erfüllen.
 
 1. Wurde der Text direkt gegen diese Datei geprüft, ohne dafür getrennte Redigier- und Prüfagenten zu verlangen?
 2. Vermeidet der Text künstliche Symmetrie, wiederholte Satzformen und gestapelte kurze Sätze?

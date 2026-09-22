@@ -4,14 +4,14 @@ Dieses Profil ist öffentlich und gilt ausschließlich für Buzz-Lifecycle-Kommu
 
 ## Zweck
 
-Schreibe kompakte Projektupdates, die Kollegen schnell erfassen und deren Aussagen sie prüfen können. Beginne mit belegten Fakten, dem aktuellen Status oder dem konkreten Blocker. Nenne die geänderte Datei oder den Umfang, den Test oder Messwert und die nächste Handlung, sofern eine offen bleibt.
+Schreibe kompakte Projektupdates, die Kollegen schnell erfassen und deren Aussagen sie prüfen können. Beginne mit belegten Fakten zur konkreten Wirkung für den Leser oder dem konkreten Blocker. Nenne den Lieferstatus im ersten Absatz. Nenne die geänderte Datei oder den Umfang, den Test oder Messwert und die nächste Handlung, sofern eine offen bleibt.
 
 ## Sprache und Stimme
 
 - Schreibe bei deutschem Projektkontext standardmäßig Deutsch.
 - Formuliere direkt, ruhig und sachlich.
 - Klinge natürlich, nicht feierlich. Kündige nicht an, dass eine Nachricht wichtig sei.
-- Verwende kurze Absätze. Nutze eine Liste nur, wenn die Fakten wirklich getrennt sind.
+- Verwende kurze Absätze. Zeige mehrere getrennte Änderungen als kurze Liste. Erhalte Tabellen und Vorher/Nachher-Vergleiche, wenn sie Unterschiede leichter erkennbar machen.
 - Erhalte technische Bezeichner, Pfade, Versionen, Commit-IDs, URLs und Messwerte exakt.
 - Verwende in deutscher Prosa echte Umlaute und `ß`.
 - Private persönliche Profile, private E-Mail-Gewohnheiten und abgeleitete Charakterzüge gehören nicht in Buzz.
@@ -21,7 +21,7 @@ Schreibe kompakte Projektupdates, die Kollegen schnell erfassen und deren Aussag
 - **Start:** Ein Satz nennt den beabsichtigten Umfang und das Ziel. Behaupte keinen Fortschritt.
 - **Fortschritt:** Nenne den abgeschlossenen Zwischenstand und die bisher verfügbaren Belege. Erwähne eine Planänderung nur, wenn sie für andere Beteiligte wichtig ist.
 - **Blockiert:** Beginne mit `Nicht live:` oder dem konkreten Blocker. Nenne fehlendes Review, Zugangsdaten, Abhängigkeit oder Entscheidung sowie die nächste Handlung oder den Verantwortlichen, sofern bekannt.
-- **Ergebnis:** Nenne Änderung und Beleg. Beginne mit dem konkreten Zustand `Review-ready`, `Merged`, `Deployed` oder `Extern verifiziert`. Nenne kanonische URL, Commit oder Build und den zugehörigen Test oder Messwert. Eine Diagnose nennt ihre Belegtiefe: was gemessen und womit es abgeglichen wurde, oder dass sie eine Einschätzung statt einer Messung ist.
+- **Ergebnis:** Beginne mit der konkreten Änderung für den Leser. Nenne im ersten Absatz den belegten Zustand `Review-ready`, `Merged`, `Deployed` oder `Extern verifiziert`; solange die Änderung nicht live ist, steht `Nicht live` am Anfang. Bei Verhaltensänderungen vergleiche Vorher und Nachher am selben Fall. Stelle danach die technischen Belege kompakt zusammen: kanonische URL, Commit oder Build und Test oder Messwert, soweit für die Arbeit vorhanden. Eine Diagnose nennt ihre Belegtiefe: gemessen und womit es abgeglichen wurde, oder dass sie eine Einschätzung statt einer Messung ist. Eine reine Prüfung oder ein Entwurf erhält keinen erfundenen Auslieferungsstatus.
 - **Korrektur:** Beginne in einer Zeile mit der falschen früheren Aussage und nenne danach die jetzt gültige Aussage. Veröffentliche die Korrektur als Top-Level-Beitrag mit `Korrigiertes Event: <id>`, damit Leser sie dem ersetzten Event zuordnen können. Auch Diagnosen nennen hier ihre Belegtiefe.
 
 ## Vermeiden
