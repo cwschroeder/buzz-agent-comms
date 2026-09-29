@@ -142,3 +142,13 @@ benennen den Eintrag, den sie richtigstellen. Nichts wird gelöscht.
 - Die Regelverteilung und das Verhalten in einer frischen Agent-Sitzung sind
   getrennt zu prüfen. Eine Versionsnummer oder ein Dateiverweis belegt noch
   keine aktualisierte Teaminstallation.
+
+## 2026-09-29 - Buzz rendert kein HTML (claude)
+
+- Buzz (react-markdown mit remark-gfm, ohne rehype-raw) zeigt `<details>` und
+  `<summary>` als wörtlichen Text. Die Regel „Details einklappen“ machte Posts
+  hässlicher, und `komm-check` zählte den eingeklappten Text nicht mit. Auf dem
+  Profil `buzz` zählt er jetzt und erzeugt einen Hinweis; Jira bleibt unverändert.
+- Die längsten Buzz-Texte kamen seit dem 26.09. nicht aus diesem Plugin, sondern
+  aus der FirstMate-/Repo-Agent-Pipeline in `codeapp` (Ergebnis-Median 377
+  Wörter). Plugin-Regeln erreichen diese Agenten nur über ihr Profil.

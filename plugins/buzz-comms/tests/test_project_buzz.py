@@ -73,10 +73,18 @@ elif sys.argv[1:5] == ["--format", "compact", "users", "get"]:
     if os.environ.get("FAKE_BUZZ_BAD_PROFILES") == "1":
         print("not-json")
     else:
-        print(json.dumps([
+        profiles = [
             {"pubkey": "c" * 64, "display_name": "FirstMate"},
             {"pubkey": "d" * 64, "display_name": "CodeApp Repo-Agent"},
-        ]))
+        ]
+        # Any other requested key has a profile unless the test withholds it.
+        if os.environ.get("FAKE_BUZZ_NO_PROFILE") != "1":
+            known = {profile["pubkey"] for profile in profiles}
+            args = sys.argv[1:]
+            for index, arg in enumerate(args[:-1]):
+                if arg == "--pubkey" and args[index + 1] not in known:
+                    profiles.append({"pubkey": args[index + 1], "display_name": "Agent"})
+        print(json.dumps(profiles))
 elif sys.argv[1:3] == ["messages", "get"]:
     # The real CLI is a binary that writes UTF-8 bytes whatever its locale;
     # FAKE_BUZZ_MESSAGES may hold characters the invoking console cannot
@@ -139,6 +147,8 @@ class HelperTestCase(unittest.TestCase):
         os.environ.pop("FAKE_BUZZ_SLEEP", None)
         os.environ.pop("FAKE_BUZZ_MESSAGES", None)
         os.environ.pop("FAKE_BUZZ_REQUIRE_STDIN", None)
+        os.environ.pop("FAKE_BUZZ_NO_PROFILE", None)
+        self.addCleanup(os.environ.pop, "FAKE_BUZZ_NO_PROFILE", None)
         self.addCleanup(os.environ.pop, "BUZZ_AGENT_HOME", None)
         self.addCleanup(os.environ.pop, "FAKE_BUZZ_LOG", None)
         self.addCleanup(os.environ.pop, "FAKE_BUZZ_BAD_PROFILES", None)
@@ -402,6 +412,107 @@ class ContentValidation(HelperTestCase):
     def test_invalid_root_event_id_is_rejected(self):
         self.assertEqual(1, self.run_cli(["result", "u-1", "not-an-event", "Fertig"]))
         self.assertEqual([], self.calls())
+
+
+class KommCheck(HelperTestCase):
+    """Reader-first length check, shared by Buzz and project Jira helpers.
+
+    The fixtures mirror a real ticket thread: a 326-word comment the customer had to condense
+    herself, and the 55-word rewrite with a sketch and the original folded away.
+    """
+
+    LONG = " ".join(["Die Entscheidung ist organisatorisch und liegt bei Ihnen."] * 40)
+    SHORT = (
+        "**Entscheidung nötig: Wie kommt die BANF in IVU.Flow?**\n\n"
+        "![Skizze](entscheidung.png)\n\n"
+        "1. Fall 1: Easy wird abgelöst, alle erfassen in IVU.Flow.\n"
+        "2. Fall 2: BANF bleibt in Easy, IVU.Flow liest die Easy-Mail.\n\n"
+        "Bitte entscheiden Sie bis Montag.\n"
+    )
+
+    def setUp(self):
+        super().setUp()
+        os.chdir(self.workspace)
+
+    def test_long_jira_comment_is_rejected(self):
+        errors, _ = project_buzz.komm_check(self.LONG, "jira")
+        self.assertTrue(errors)
+        self.assertIn("Grenze 160", errors[0])
+
+    def test_short_comment_with_sketch_passes_without_hints(self):
+        errors, warnings = project_buzz.komm_check(self.SHORT, "jira")
+        self.assertEqual([], errors)
+        self.assertEqual([], warnings)
+
+    def test_folded_original_does_not_count(self):
+        content = self.SHORT + "<details><summary>Original</summary>\n" + self.LONG + "\n</details>"
+        errors, _ = project_buzz.komm_check(content, "jira")
+        self.assertEqual([], errors)
+
+    def test_buzz_counts_folded_text_because_buzz_cannot_fold(self):
+        content = self.SHORT + "<details><summary>Original</summary>\n" + self.LONG + "\n</details>"
+        errors, warnings = project_buzz.komm_check(content, "buzz")
+        self.assertTrue(errors)
+        self.assertNotIn("<details>", errors[0])
+        self.assertTrue(any("zeigt <details> als Text" in w for w in warnings))
+
+    def test_long_buzz_prose_without_structure_gets_a_structure_hint(self):
+        prose = " ".join(["Der Stand ist geprüft."] * 45)
+        _, warnings = project_buzz.komm_check(prose, "buzz")
+        self.assertTrue(any("ohne Liste, Tabelle oder Überschrift" in w for w in warnings))
+        structured = "Nicht live.\n\n## Belege\n\n" + "\n".join(["- Der Stand ist geprüft."] * 45)
+        _, warnings = project_buzz.komm_check(structured, "buzz")
+        self.assertFalse(any("ohne Liste, Tabelle oder Überschrift" in w for w in warnings))
+
+    def test_named_reason_turns_rejection_into_hint(self):
+        errors, warnings = project_buzz.komm_check(self.LONG, "jira", "Protokoll")
+        self.assertEqual([], errors)
+        self.assertTrue(any("Grund: Protokoll" in w for w in warnings))
+
+    def test_loose_questions_and_prose_block_are_flagged(self):
+        text = "Wer entscheidet? Bis wann? " + " ".join(["wort"] * 70)
+        _, warnings = project_buzz.komm_check(text, "buzz")
+        self.assertTrue(any("Fragen im Fließtext" in w for w in warnings))
+        self.assertTrue(any("Absatz mit" in w for w in warnings))
+
+    def test_buzz_lifecycle_update_over_limit_is_not_sent(self):
+        content = " ".join(["Stand geprüft und dokumentiert."] * 80)
+        self.assertEqual(1, self.run_cli(["start", "u-long", content]))
+        self.assertEqual([], self.calls())
+
+    def test_buzz_lifecycle_update_with_komm_lang_is_sent(self):
+        content = " ".join(["Stand geprüft und dokumentiert."] * 80)
+        os.environ["KOMM_LANG"] = "Abschlussbericht mit Tabelle"
+        try:
+            self.assertEqual(0, self.run_cli(["start", "u-long-ok", content]))
+        finally:
+            del os.environ["KOMM_LANG"]
+
+    def test_cli_reads_file_and_exits_nonzero_on_rejection(self):
+        path = Path(self.workspace) / "kommentar.md"
+        path.write_text(self.LONG, encoding="utf-8")
+        self.assertEqual(1, self.run_cli(["komm-check", "--profil", "jira", str(path)]))
+        path.write_text(self.SHORT, encoding="utf-8")
+        self.assertEqual(0, self.run_cli(["komm-check", "--profil", "jira", str(path)]))
+
+
+class Skizze(HelperTestCase):
+    def test_decision_sketch_is_wellformed_svg_with_all_steps(self):
+        import xml.etree.ElementTree as ET
+        svg = project_buzz.skizze_svg({"typ": "entscheidung", "titel": "Wie?", "faelle": [
+            {"name": "Fall 1", "schritte": ["A & B", "C"], "stand": "fertig"},
+            {"name": "Fall 2", "schritte": ["D"], "braucht": "Daten <IT>"}]})
+        ET.fromstring(svg)
+        for text in ("A &amp; B", "Fall 2", "Daten &lt;IT&gt;", "Braucht:"):
+            self.assertIn(text, svg)
+
+    def test_timeline_needs_two_points(self):
+        with self.assertRaises(project_buzz.UserError):
+            project_buzz.skizze_svg({"typ": "zeitstrahl", "punkte": [{"marke": "Tag 0"}]})
+
+    def test_unknown_type_fails_loudly(self):
+        with self.assertRaises(project_buzz.UserError):
+            project_buzz.skizze_svg({"typ": "torte"})
 
 
 class AttachmentPublishing(HelperTestCase):
@@ -1723,8 +1834,45 @@ class ProvisionWithoutBinaries(HelperTestCase):
     def test_existing_identity_is_not_replaced_without_force(self):
         self.assertEqual(0, self.provision()[0])
         first = (self.home / "identity.json").read_text()
-        self.assertEqual(1, self.provision()[0])
+        code, output = self.provision()
+        self.assertEqual(0, code)
         self.assertEqual(first, (self.home / "identity.json").read_text())
+        self.assertTrue(json.loads(output)["reused_identity"])
+
+    def test_existing_identity_republishes_its_profile_without_owner_key(self):
+        # The repair path for an identity whose profile never reached the relay:
+        # same key, profile published again, no owner key asked for.
+        self.assertEqual(0, self.provision()[0])
+        identity = json.loads((self.home / "identity.json").read_text())
+        os.environ.pop("BUZZ_OWNER_PRIVATE_KEY")
+        self.log.unlink()
+        code, output = self.provision()
+        self.assertEqual(0, code)
+        self.assertEqual([["users", "set-profile"]], [c[:2] for c in self.calls()])
+        self.assertEqual(identity["public_key"], json.loads(output)["public_key"])
+        self.assertNotIn(identity["private_key"], output)
+
+
+class DoctorProfileCheck(HelperTestCase):
+    def doctor(self):
+        os.chdir(self.workspace)
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = self.run_cli(["doctor"])
+        payload = json.loads(stdout.getvalue())
+        return code, [check for check in payload["checks"] if check[0] == "profile"]
+
+    def test_missing_profile_fails_and_names_the_repair(self):
+        os.environ["FAKE_BUZZ_NO_PROFILE"] = "1"
+        code, profile = self.doctor()
+        self.assertEqual(1, code)
+        self.assertEqual("fail", profile[0][1])
+        self.assertIn("project-buzz provision", profile[0][2])
+
+    def test_published_profile_passes(self):
+        code, profile = self.doctor()
+        self.assertEqual(0, code)
+        self.assertEqual("ok", profile[0][1])
 
 
 class ObsoleteBinaryConfig(HelperTestCase):

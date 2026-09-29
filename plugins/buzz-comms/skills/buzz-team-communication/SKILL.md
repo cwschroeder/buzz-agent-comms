@@ -181,12 +181,30 @@ dropping failures, limits, the canonical URL, commit/build or test evidence.
   results, or a short real recording for an interaction.
 - Images go through the existing top-level attachment workflow. One focused visual
   unit is usually enough; a before/after pair counts as one comparison.
-- Do not assume Mermaid renders in the client. Render a diagram to a checked image
-  when possible; use a narrow fenced text diagram as fallback.
+- Buzz renders GitHub-flavoured Markdown: headings, lists, tables, bold, inline
+  code and fenced code. It does not render Mermaid or raw HTML; `<details>`,
+  `<summary>` and similar tags appear as literal text. Render a diagram to a
+  checked image; use a narrow fenced text diagram only as fallback.
+- A result above roughly 150 words needs visible structure: a lead paragraph,
+  then `## Belege` (or a similar heading) with a list or table. The helper hints
+  when a long text has neither.
 - Give each attachment a caption explaining what to notice. The message must still
   be understandable without opening the image.
 - Start messages and minor progress updates can remain one sentence. Do not
   manufacture diagrams, numbers or stories to fill a template.
+- The helper enforces length: above 150 words it prints hints, above 300 it
+  refuses the update. Shorten first (answer first, numbered questions, attach
+  long material as a file or link it). On Buzz, text inside `<details>` counts
+  and the helper warns about the tag, because Buzz cannot fold it. A deliberate long update names
+  its reason in `KOMM_LANG="<reason>"`. The same check serves other channels:
+  `project-buzz komm-check --profil jira <file>` for customer ticket comments
+  (hints above 80 words, refusal above 160).
+- For a decision, a flow or a timeline, `project-buzz skizze <spec.json>` renders
+  a sketch to SVG and PNG without a browser. Spec: `{"typ": "entscheidung",
+  "titel": "…", "faelle": [{"name": "Fall 1", "schritte": ["…"], "braucht": "…",
+  "stand": "…"}]}`, `{"typ": "ablauf", "schritte": [...]}` or `{"typ":
+  "zeitstrahl", "punkte": [{"marke": "Tag 3", "text": "…"}]}`. Look at the PNG
+  before posting it.
 
 Read [examples.md](examples.md) when choosing a result format or checking a rewrite.
 Examples are synthetic teaching material, never facts to copy into a live post.

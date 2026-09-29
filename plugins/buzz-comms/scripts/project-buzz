@@ -56,7 +56,7 @@ MARKER_RE = re.compile(
 CLOSING_PHASES = ("result", "blocked", "correction")
 
 MAX_CONTENT = 16000
-HELPER_VERSION = "0.23.0"
+HELPER_VERSION = "0.25.0"
 FORBIDDEN_IN_CONTENT = ("[PILOT-", "[AGENT-")
 LIFECYCLE_PHASES = ("start", "progress", "blocked", "result")
 GERMAN_ASCII_SUBSTITUTION_RE = re.compile(
@@ -768,6 +768,21 @@ def resolve_project(
     )
 
 
+def has_relay_profile(config: Dict[str, Any], pubkey: str) -> bool:
+    output = run_buzz(config, ["--format", "compact", "users", "get", "--pubkey", pubkey])
+    try:
+        profiles = json.loads(output or "[]")
+    except ValueError as error:
+        raise UserError("Could not parse profile lookup from buzz: {0}".format(error))
+    if not isinstance(profiles, list):
+        raise UserError("Unexpected profile payload from buzz")
+    return any(
+        isinstance(profile, dict)
+        and str(profile.get("pubkey") or "").lower() == pubkey.lower()
+        for profile in profiles
+    )
+
+
 def member_channels(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     output = run_buzz(config, ["channels", "list", "--member"])
     try:
@@ -794,6 +809,127 @@ def validate_root_event(event_id: str) -> str:
     if not EVENT_ID_RE.match(event_id):
         raise UserError("Invalid Buzz root event ID: {0}".format(event_id))
     return event_id
+
+
+# Reader-first length check (komm-check). One implementation for Buzz, the
+# pilot helper and the Jira comment helper of individual projects. The numbers
+# come from a customer complaint on 25.09.2026: our Jira comments had
+# 100-330 words, the answers 5-80, and the decisive question got lost.
+# Above `warn` the check nudges; above `limit` it refuses unless the author
+# names a reason (`--lang`, or KOMM_LANG for lifecycle updates).
+KOMM_PROFILES = {
+    "jira": {"warn": 80, "limit": 160},
+    "buzz": {"warn": 150, "limit": 300},
+}
+KOMM_PARAGRAPH_WARN = 60
+KOMM_FIRST_LINE_WARN = 25
+
+
+def komm_prose(content: str, profile: str = "jira") -> str:
+    """Visible prose: no code, no images, no URLs.
+
+    Jira folds <details>, so folded text does not count there. Buzz renders
+    raw HTML as literal text, so on Buzz the folded text stays visible.
+    """
+    text = content
+    if profile != "buzz":
+        text = re.sub(r"<details>.*?</details>", " ", text, flags=re.S | re.I)
+    text = strip_code_regions(text)
+    text = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", text)
+    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
+    text = re.sub(r"https?://\S+", " ", text)
+    return text
+
+
+def komm_words(text: str) -> int:
+    return len(re.findall(r"[0-9A-Za-zÄÖÜäöüß][\w.,/%€-]*", text))
+
+
+def komm_check(content: str, profile: str, reason: str = "") -> Tuple[List[str], List[str]]:
+    """Return (errors, warnings) for a reader-facing text."""
+    limits = KOMM_PROFILES[profile]
+    prose = komm_prose(content, profile)
+    words = komm_words(prose)
+    errors = []  # type: List[str]
+    warnings = []  # type: List[str]
+    if words > limits["limit"] and not reason.strip():
+        errors.append(
+            "{0} Wörter, Grenze {1} ({2}). Kürzen: Antwort zuerst, Rückfragen "
+            "nummeriert, Längeres {3} oder verlinken. Wer "
+            "bewusst länger schreibt, nennt den Grund mit --lang \"<Grund>\" "
+            "(Lifecycle: KOMM_LANG).".format(
+                words, limits["limit"], profile,
+                "als Datei anhängen" if profile == "buzz" else "einklappen (<details>)",
+            )
+        )
+    elif words > limits["warn"]:
+        warnings.append(
+            "{0} Wörter, Richtwert {1} ({2}){3}.".format(
+                words, limits["warn"], profile,
+                ", Grund: " + reason.strip() if reason.strip() else "",
+            )
+        )
+    lines = [line.strip() for line in prose.splitlines() if line.strip()]
+    if lines:
+        first = re.sub(r"^[#>*\s-]+", "", lines[0])
+        if komm_words(first) > KOMM_FIRST_LINE_WARN:
+            warnings.append(
+                "Die erste Zeile hat {0} Wörter. Sie sollte die Antwort oder den "
+                "Status tragen, nicht die Herleitung.".format(komm_words(first))
+            )
+    for paragraph in re.split(r"\n\s*\n", prose):
+        body = paragraph.strip()
+        if not body or re.match(r"^\s*([-*]|\d+[.)]|\|)", body):
+            continue
+        count = komm_words(body)
+        if count > KOMM_PARAGRAPH_WARN:
+            warnings.append(
+                "Absatz mit {0} Wörtern ({1} …): als Liste, Tabelle oder Bild "
+                "fassen.".format(count, " ".join(body.split()[:6]))
+            )
+    loose_questions = 0
+    for line in lines:
+        if "?" in line and not re.match(r"^\s*(\d+[.)]|[-*])\s", line):
+            loose_questions += line.count("?")
+    if loose_questions > 1:
+        warnings.append(
+            "{0} Fragen im Fließtext. Rückfragen nummerieren, am besten als "
+            "Auswahl (Fall 1 / Fall 2).".format(loose_questions)
+        )
+    if re.search(r"\s[—–]\s|—", prose):
+        warnings.append("Gedankenstrich im Text: Komma, Punkt oder Klammer nehmen.")
+    if profile == "buzz" and re.search(r"<(details|summary)\b", content, flags=re.I):
+        warnings.append(
+            "Buzz zeigt <details> als Text an und klappt nichts ein. Belege als "
+            "Liste unter einer Überschrift, Langes als Datei anhängen oder verlinken."
+        )
+    if (
+        profile == "buzz"
+        and words > limits["warn"]
+        and not re.search(r"^\s*([-*]|\d+[.)]|\||#)|!\[[^\]]*\]\([^)]*\)", content, flags=re.M)
+    ):
+        warnings.append(
+            "Langer Text ohne Liste, Tabelle oder Überschrift. Belege als Liste, "
+            "Vergleich als Tabelle, Ablauf als Skizze (project-buzz skizze)."
+        )
+    if (
+        profile == "jira"
+        and words > limits["warn"]
+        and not re.search(r"!\[[^\]]*\]\([^)]*\)|^\s*\|", content, flags=re.M)
+    ):
+        warnings.append(
+            "Langer Text ohne Bild oder Tabelle. Passt eine Skizze, ein markierter "
+            "Screenshot oder eine Tabelle statt eines Absatzes?"
+        )
+    return errors, warnings
+
+
+def report_komm_check(content: str, profile: str, reason: str = "") -> None:
+    errors, warnings = komm_check(content, profile, reason)
+    for warning in warnings:
+        sys.stderr.write("komm-check Hinweis: {0}\n".format(warning))
+    if errors:
+        raise UserError("komm-check: " + " ".join(errors))
 
 
 def validate_content(content: str) -> str:
@@ -830,6 +966,7 @@ def validate_content(content: str) -> str:
                 ", ".join(secret_hits)
             )
         )
+    report_komm_check(content, "buzz", os.environ.get("KOMM_LANG", ""))
     return content
 
 
@@ -1204,30 +1341,12 @@ def owner_private_key() -> str:
     )
 
 
-def command_provision(arguments: argparse.Namespace) -> int:
-    config = load_config()
-    owner_secret = owner_private_key()
-
-    if identity_path().is_file() and not arguments.force:
-        raise UserError(
-            "An agent identity already exists at {0}. Pass --force to replace "
-            "it (the old agent keeps its channel memberships and would need to "
-            "be re-granted).".format(identity_path())
-        )
-
-    # The owner key is parsed before anything is generated, so a mistyped key
-    # fails before an identity file exists.
-    owner = parse_owner_secret(owner_secret)
-    secret, public = generate_keypair()
-    auth_tag = compute_auth_tag(owner, public)
-    if verify_auth_tag(auth_tag, public) is None:
-        raise UserError("The generated owner attestation did not verify.")
-
-    save_identity(secret, public, auth_tag)
-    identity = {"private_key": secret, "public_key": public, "auth_tag": auth_tag}
-
+def publish_profile(
+    config: Dict[str, Any], identity: Dict[str, str], arguments: argparse.Namespace
+) -> None:
     # Publishing the signed profile is what materializes the owner attestation
-    # on the relay, exactly as the owner-side pilot does.
+    # on the relay, exactly as the owner-side pilot does. Without it the owner
+    # cannot grant the key: the relay knows no user by that pubkey.
     run_buzz(
         config,
         [
@@ -1240,6 +1359,50 @@ def command_provision(arguments: argparse.Namespace) -> int:
         ],
         identity=identity,
     )
+
+
+def command_provision(arguments: argparse.Namespace) -> int:
+    config = load_config()
+
+    if identity_path().is_file() and not arguments.force:
+        # An existing identity keeps its key; only its profile is published
+        # again. This is the repair path for an identity whose profile never
+        # reached the relay, and it needs no owner key: the stored auth tag
+        # already carries the attestation.
+        identity = load_identity()
+        publish_profile(config, identity, arguments)
+        print(
+            json.dumps(
+                {
+                    "accepted": True,
+                    "public_key": identity["public_key"],
+                    "identity_file": str(identity_path()),
+                    "reused_identity": True,
+                    "next_step": (
+                        "Profile published for the existing identity. Send "
+                        "this public key to the Buzz owner and ask for a grant "
+                        "on the projects you work on. Pass --force only to "
+                        "replace the key."
+                    ),
+                },
+                indent=2,
+            )
+        )
+        return 0
+
+    owner_secret = owner_private_key()
+
+    # The owner key is parsed before anything is generated, so a mistyped key
+    # fails before an identity file exists.
+    owner = parse_owner_secret(owner_secret)
+    secret, public = generate_keypair()
+    auth_tag = compute_auth_tag(owner, public)
+    if verify_auth_tag(auth_tag, public) is None:
+        raise UserError("The generated owner attestation did not verify.")
+
+    save_identity(secret, public, auth_tag)
+    identity = {"private_key": secret, "public_key": public, "auth_tag": auth_tag}
+    publish_profile(config, identity, arguments)
 
     print(
         json.dumps(
@@ -1575,6 +1738,29 @@ def command_doctor(_: argparse.Namespace) -> int:
         findings.append(("relay", "fail", str(error)))
         channels = []
 
+    # Relay access comes from the owner attestation, so a key can reach the
+    # relay without a profile. The owner's grant looks the key up by profile,
+    # though, and refuses a key it cannot find.
+    if not any(check[0] == "relay" and check[1] == "fail" for check in findings):
+        try:
+            if has_relay_profile(config, identity["public_key"]):
+                findings.append(("profile", "ok", "published on the relay"))
+            else:
+                ok = False
+                findings.append(
+                    (
+                        "profile",
+                        "fail",
+                        "no profile on the relay, so the owner cannot grant this "
+                        "key; run 'project-buzz provision --display-name "
+                        "\"<Name> (Claude Code)\"' to publish it for the existing "
+                        "identity",
+                    )
+                )
+        except UserError as error:
+            ok = False
+            findings.append(("profile", "fail", str(error)))
+
     visible = {str(c.get("channel_id")) for c in channels}
     for workspace, entry in sorted(projects(config).items()):
         label = "project:{0}".format(entry.get("repo_id"))
@@ -1590,6 +1776,180 @@ def command_doctor(_: argparse.Namespace) -> int:
 
     print(json.dumps({"ok": ok, "checks": findings}, indent=2))
     return 0 if ok else 1
+
+
+# Sketches (skizze): a picture instead of a paragraph, from a tiny JSON spec any
+# model can write. Three shapes cover what customer tickets needed so far:
+# a decision between cases, a linear flow and a timeline. Pure SVG, rendered to
+# PNG with rsvg-convert or ImageMagick when present.
+SKIZZE_TOENE = {
+    "gruen": ("#ccfbf1", "#0f766e"),
+    "gelb": ("#fef3c7", "#b45309"),
+    "blau": ("#dbeafe", "#1d4ed8"),
+    "rot": ("#fee2e2", "#b91c1c"),
+    "grau": ("#e2e8f0", "#475569"),
+}
+
+
+def _svg_text(value: Any) -> str:
+    return (str(value).replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;").replace('"', "&quot;"))
+
+
+def _umbrechen(text: str, breite: int) -> List[str]:
+    zeilen, aktuell = [], ""
+    for wort in str(text).split():
+        if aktuell and len(aktuell) + 1 + len(wort) > breite:
+            zeilen.append(aktuell)
+            aktuell = wort
+        else:
+            aktuell = (aktuell + " " + wort).strip()
+    if aktuell:
+        zeilen.append(aktuell)
+    return zeilen or [""]
+
+
+def _kasten(x: float, y: float, b: float, h: float, text: str, ton: str) -> List[str]:
+    fuellung, rand = SKIZZE_TOENE.get(ton, SKIZZE_TOENE["grau"])
+    zeilen = _umbrechen(text, max(8, int(b / 8.2)))
+    teile = ['<rect x="{0}" y="{1}" width="{2}" height="{3}" rx="8" fill="{4}" '
+             'stroke="{5}"/>'.format(x, y, b, h, fuellung, rand)]
+    start = y + h / 2 - (len(zeilen) - 1) * 9 + 5
+    for n, zeile in enumerate(zeilen):
+        teile.append('<text x="{0}" y="{1}" font-size="14" text-anchor="middle" '
+                     'fill="#0f172a">{2}</text>'.format(x + b / 2, start + n * 18, _svg_text(zeile)))
+    return teile
+
+
+def _pfeil(x1: float, y: float, x2: float) -> str:
+    return ('<line x1="{0}" y1="{1}" x2="{2}" y2="{1}" stroke="#475569" stroke-width="2" '
+            'marker-end="url(#pfeil)"/>'.format(x1, y, x2 - 2))
+
+
+def skizze_svg(spec: Dict[str, Any]) -> str:
+    typ = spec.get("typ", "ablauf")
+    titel = spec.get("titel", "")
+    breite = 860
+    teile = []  # type: List[str]
+    y = 34
+    if titel:
+        teile.append('<text x="24" y="{0}" font-size="20" font-weight="bold" fill="#0f172a">'
+                     '{1}</text>'.format(y, _svg_text(titel)))
+        y += 26
+    if typ in ("entscheidung", "ablauf"):
+        faelle = spec.get("faelle") or [{"schritte": spec.get("schritte", []),
+                                          "ton": spec.get("ton", "blau")}]
+        if not all(f.get("schritte") for f in faelle):
+            raise UserError("skizze: jeder Fall braucht mindestens einen Schritt")
+        links = 170 if any(f.get("name") for f in faelle) else 24
+        for n, fall in enumerate(faelle):
+            ton = fall.get("ton") or ("gruen", "gelb", "blau", "rot")[n % 4]
+            schritte = fall["schritte"]
+            abstand = 36
+            b = min(240, (breite - links - 24 - abstand * (len(schritte) - 1)) / len(schritte))
+            hoehe = max(54, 18 * max(len(_umbrechen(t, int(b / 8.2))) for t in schritte) + 20)
+            if n:
+                teile.append('<line x1="24" y1="{0}" x2="{1}" y2="{0}" stroke="#cbd5e1"/>'.format(
+                    y - 12, breite - 24))
+            _, rand = SKIZZE_TOENE.get(ton, SKIZZE_TOENE["grau"])
+            if fall.get("name"):
+                teile.append('<text x="24" y="{0}" font-size="16" font-weight="bold" '
+                             'fill="{1}">{2}</text>'.format(y + 22, rand, _svg_text(fall["name"])))
+            for k, zeile in enumerate(_umbrechen(fall.get("untertitel", ""), 18)):
+                teile.append('<text x="24" y="{0}" font-size="13" fill="#334155">{1}</text>'.format(
+                    y + 42 + k * 16, _svg_text(zeile)))
+            x = links
+            for k, schritt in enumerate(schritte):
+                letzter = k == len(schritte) - 1
+                teile += _kasten(x, y, b, hoehe, schritt,
+                                 "grau" if letzter and len(schritte) > 1 and typ == "entscheidung" else ton)
+                if not letzter:
+                    teile.append(_pfeil(x + b, y + hoehe / 2, x + b + abstand))
+                x += b + abstand
+            y += hoehe + 22
+            for schluessel, fett in (("braucht", False), ("stand", True)):
+                if fall.get(schluessel):
+                    text = ("Braucht: " if schluessel == "braucht" else "") + fall[schluessel]
+                    teile.append('<text x="{0}" y="{1}" font-size="13" {2}fill="{3}">{4}</text>'.format(
+                        links, y, 'font-weight="bold" ' if fett else "",
+                        rand if fett else "#334155", _svg_text(text)))
+                    y += 18
+            y += 26 if n < len(faelle) - 1 else 4
+    elif typ == "zeitstrahl":
+        punkte = spec.get("punkte") or []
+        if len(punkte) < 2:
+            raise UserError("skizze: ein Zeitstrahl braucht mindestens zwei Punkte")
+        y += 30
+        rand_x = 130
+        schritt = (breite - 2 * rand_x) / (len(punkte) - 1)
+        teile.append('<line x1="{2}" y1="{0}" x2="{1}" y2="{0}" stroke="#475569" stroke-width="3"/>'.format(
+            y, breite - rand_x, rand_x))
+        tiefe = 0
+        for n, punkt in enumerate(punkte):
+            x = rand_x + n * schritt
+            fuellung, rand = SKIZZE_TOENE.get(punkt.get("ton", "blau"), SKIZZE_TOENE["blau"])
+            teile.append('<circle cx="{0}" cy="{1}" r="9" fill="{2}" stroke="{3}" stroke-width="2"/>'.format(
+                x, y, fuellung, rand))
+            teile.append('<text x="{0}" y="{1}" font-size="14" font-weight="bold" text-anchor="middle" '
+                         'fill="{2}">{3}</text>'.format(x, y - 18, rand, _svg_text(punkt.get("marke", ""))))
+            zeilen = _umbrechen(punkt.get("text", ""), max(10, int(min(schritt, 2 * rand_x) / 8)))
+            for k, zeile in enumerate(zeilen):
+                teile.append('<text x="{0}" y="{1}" font-size="13" text-anchor="middle" '
+                             'fill="#334155">{2}</text>'.format(x, y + 32 + k * 17, _svg_text(zeile)))
+            tiefe = max(tiefe, len(zeilen))
+        y += 32 + tiefe * 17 + 16
+    else:
+        raise UserError("skizze: unbekannter typ {0!r} (entscheidung, ablauf, zeitstrahl)".format(typ))
+    if spec.get("fuss"):
+        teile.append('<text x="24" y="{0}" font-size="12" fill="#64748b">{1}</text>'.format(
+            y, _svg_text(spec["fuss"])))
+        y += 20
+    hoehe = int(y + 10)
+    return (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="{0}" height="{1}" viewBox="0 0 {0} {1}" '
+        'font-family="Helvetica, Arial, sans-serif"><rect width="{0}" height="{1}" fill="#ffffff"/>'
+        '<defs><marker id="pfeil" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" '
+        'markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker></defs>'
+        '{2}</svg>\n'.format(breite, hoehe, "".join(teile))
+    )
+
+
+def command_skizze(arguments: argparse.Namespace) -> int:
+    try:
+        with open(arguments.spec, encoding="utf-8") as handle:
+            spec = json.load(handle)
+    except (OSError, ValueError) as error:
+        raise UserError("skizze: {0}".format(error))
+    ziel = arguments.out or os.path.splitext(arguments.spec)[0]
+    svg_pfad = ziel + ".svg"
+    with open(svg_pfad, "w", encoding="utf-8") as handle:
+        handle.write(skizze_svg(spec))
+    png_pfad = ziel + ".png"
+    if shutil.which("rsvg-convert"):
+        befehl = ["rsvg-convert", "-z", "2", svg_pfad, "-o", png_pfad]
+    elif shutil.which("magick"):
+        befehl = ["magick", "-density", "192", svg_pfad, png_pfad]
+    else:
+        befehl = None
+    if befehl and subprocess.run(befehl, capture_output=True).returncode == 0:
+        print(png_pfad)
+    else:
+        sys.stderr.write("skizze: kein rsvg-convert oder magick gefunden, nur SVG erzeugt.\n")
+        print(svg_pfad)
+    return 0
+
+
+def command_komm_check(arguments: argparse.Namespace) -> int:
+    source = arguments.file
+    if source and source != "-":
+        with open(source, encoding="utf-8") as handle:
+            content = handle.read()
+    else:
+        content = sys.stdin.read()
+    report_komm_check(content, arguments.profil, arguments.lang or "")
+    words = komm_words(komm_prose(content, arguments.profil))
+    sys.stderr.write("komm-check ok: {0} Wörter ({1}).\n".format(words, arguments.profil))
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1664,6 +2024,19 @@ def build_parser() -> argparse.ArgumentParser:
     attach.add_argument("files", nargs="+")
     attach.add_argument("--repo-id", default=None)
     attach.set_defaults(handler=command_attach)
+
+    komm = sub.add_parser(
+        "komm-check", help="Check a reader-facing text for length and structure"
+    )
+    komm.add_argument("file", nargs="?", default="-", help="Markdown file, - for stdin")
+    komm.add_argument("--profil", choices=sorted(KOMM_PROFILES), default="buzz")
+    komm.add_argument("--lang", default="", help="Reason for exceeding the limit")
+    komm.set_defaults(handler=command_komm_check)
+
+    skizze = sub.add_parser("skizze", help="Render a sketch (decision, flow, timeline) from JSON")
+    skizze.add_argument("spec", help="JSON file: typ entscheidung|ablauf|zeitstrahl")
+    skizze.add_argument("--out", default="", help="Output path without extension")
+    skizze.set_defaults(handler=command_skizze)
 
     doctor = sub.add_parser("doctor", help="Verify config, identity and channel access")
     doctor.set_defaults(handler=command_doctor)

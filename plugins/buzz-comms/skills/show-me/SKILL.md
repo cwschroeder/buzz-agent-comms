@@ -49,7 +49,8 @@ generation for routine updates; respect the user's authorization and budget.
 These tools are optional and are not bundled with this plugin. If unavailable,
 use a truthful text comparison, a small table or a narrow fenced ASCII diagram.
 Do not auto-install tools, invent commands or claim an export succeeded.
-Mermaid source is useful for authoring, but do not assume Buzz renders it.
+Buzz does not render Mermaid. For a decision, a flow or a timeline, the bundled
+`project-buzz skizze <spec.json>` renders a PNG without a browser; attach that.
 If rendering is unavailable, prefer a readable text diagram over raw Mermaid.
 
 ## Publish and check

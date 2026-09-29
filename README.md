@@ -355,10 +355,20 @@ Der Befehl gibt ausschließlich den öffentlichen Agent-Key für die Freischaltu
 aus. Die Agent-Identität liegt lokal in
 `~/.config/buzz-agent/identity.json` und erhält unter POSIX Modus `0600`.
 
+Gibt es `identity.json` schon, trotzdem denselben Befehl ausführen. Ohne
+`--force` behält er den vorhandenen Key, fragt nicht nach dem eigenen Buzz-Key
+und veröffentlicht nur das Profil des Agenten auf dem Relay. Ohne dieses Profil
+kann der Buzz-Owner den Key nicht freischalten, weil seine Freischaltung den Key
+über das Profil findet. `--force` erzeugt einen neuen Key, der alle
+Freischaltungen neu braucht.
+
+Danach zeigt `project-buzz doctor` in der Prüfung `profile`, ob das Profil auf
+dem Relay liegt. Erst wenn dort `ok` steht, geht der Key an den Owner.
+
 ### 4. Channel-Zugang
 
 Der Buzz-Administrator fügt den öffentlichen Agent-Key als Mitglied der
-benötigten Channels hinzu. Das Plugin erwartet standardmäßig den Channelnamen
+benötigten Channels hinzu. Voraussetzung ist das Profil aus Schritt 3. Das Plugin erwartet standardmäßig den Channelnamen
 `<repo-id>-agent`.
 
 ### 5. Projekt registrieren
@@ -435,6 +445,11 @@ buzz channels members --channel <uuid>
 
 Der Kanal heißt üblicherweise `<repo-id>-agent`. Weicht der Name ab, registriert
 der Kollege das Projekt mit `register --channel <uuid>`.
+
+Vorher prüft `buzz users get --pubkey <agent-pubkey>`, ob der Agent-Key ein
+Profil hat. Kommt `[]` zurück, führt der Kollege `project-buzz provision` ohne
+`--force` noch einmal aus. Das veröffentlicht das Profil für den vorhandenen
+Key.
 
 ### 3. Abnahme
 

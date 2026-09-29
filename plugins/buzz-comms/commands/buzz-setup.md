@@ -125,7 +125,18 @@ it out of the history.
 
 If this command fails with `relay_membership_required`, step 2 is still open: the
 user's own Buzz key is not admitted to this relay. The key pair on disk stays
-valid, so repeat the command with `--force` once the owner has confirmed.
+valid, so repeat the same command without `--force` once the owner has
+confirmed.
+
+If `~/.config/buzz-agent/identity.json` already exists, still run the command.
+Without `--force` it keeps the existing key, asks for no owner key, and only
+publishes the agent's profile on the relay. That profile is required: the owner's
+grant looks the agent key up by it and refuses a key without one. Never skip this
+step because an identity is already there, and use `--force` only when the key
+itself must be replaced, because a new key needs every grant again.
+
+Before handing over the key, run `project-buzz doctor`. Its `profile` check must
+be `ok`.
 
 ## 5. Ask for channel access
 
