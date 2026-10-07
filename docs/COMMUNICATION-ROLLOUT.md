@@ -55,3 +55,38 @@ Ein Quellcommit beweist keine Installation auf einem Kollegenrechner. Nenne im
 Ergebnis getrennt den geprüften Quellstand, den veröffentlichten Stand und die
 tatsächlich geprüften Installationen. Zusätzliche Grafikdienste sind optional;
 das Plugin installiert sie nicht automatisch.
+
+## Claude Code über Organisationseinstellungen
+
+Ein Organisations-Owner öffnet **Organisationseinstellungen > Claude Code >
+Verwaltete Einstellungen**. Die Vorlage
+[claude-code-managed-settings.json](claude-code-managed-settings.json) aktiviert
+Buzz verpflichtend und bezieht den Marketplace mit automatischen Updates von
+GitHub. Bei bestehenden Einstellungen die beiden Einträge zusammenführen; andere
+Einstellungen erhalten. Ist diese Konfiguration bereits gespeichert, genügt die
+Veröffentlichung einer neuen Plugin-Version.
+
+Claude Code aktualisiert den Marketplace nach dem Start im Hintergrund. Die neue
+Plugin-Version wird in einer folgenden Sitzung aktiv. Organisationseinstellungen
+gelten für die angemeldeten Benutzer der Organisation. Eine laufende Sitzung oder
+ein persönliches Konto beweist deshalb noch keinen aktuellen Teamstand.
+
+Der Agent prüft vor Projektarbeit mit `install --check`, ob die stabile Helper-Kopie
+zur geladenen Plugin-Version passt, und aktualisiert sie bei Abweichung. Das
+Marketplace-Update allein ersetzt diese Kopie nicht.
+
+Prüfe nach einem Release in einer neuen Sitzung:
+
+- `/buzz-comms:buzz-status` zeigt die veröffentlichte Plugin-Version.
+- `install --check` meldet `up_to_date: true`.
+- Ein Ablaufbeitrag verwendet Archify oder die eingebaute Skizze.
+- Ein unstrukturierter Buzz-Text über 150 Wörter wird vor dem Versand abgelehnt.
+
+`DISABLE_AUTOUPDATER` und `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` können
+automatische Updates abschalten. Falls ein Rechner zurückbleibt, prüfe diese
+Variablen und das verwendete Konto, bevor du die Organisationskonfiguration
+änderst. Bei nicht interaktiven Aufrufen (`-p`) kann
+`CLAUDE_CODE_SYNC_PLUGIN_INSTALL=1` die Installation vor Ausführung abwarten.
+
+Quellen: [Organisations-Plugins](https://code.claude.com/docs/en/plugins/org),
+[Serververwaltete Einstellungen](https://code.claude.com/docs/en/server-managed-settings).

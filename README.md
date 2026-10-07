@@ -150,6 +150,11 @@ Cloud-Pfad und wird nicht verwendet.
 
 ## Installation
 
+Für die gemeinsame Verteilung über Claude-Code-Organisationseinstellungen siehe
+[Rollout-Anleitung](docs/COMMUNICATION-ROLLOUT.md#claude-code-über-organisationseinstellungen).
+Sie enthält die GitHub-Vorlage mit verpflichtender Aktivierung und automatischen
+Updates.
+
 ### Erstinstallation
 
 In Claude Code, auf einem Rechner ohne vorherige Installation:

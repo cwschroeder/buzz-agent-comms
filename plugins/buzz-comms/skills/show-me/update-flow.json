@@ -1,0 +1,5 @@
+{
+  "typ": "ablauf",
+  "titel": "Beispiel: Plugin-Regeln verteilen",
+  "schritte": ["Regeln prüfen und testen", "Version auf GitHub veröffentlichen", "Marketplace automatisch aktualisieren", "Neue Sitzung lädt Plugin", "Helper prüfen und aktualisieren"]
+}

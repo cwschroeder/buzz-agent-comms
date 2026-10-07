@@ -1,0 +1,14 @@
+{
+  "enabledPlugins": {
+    "buzz-comms@buzz-agent-comms": true
+  },
+  "extraKnownMarketplaces": {
+    "buzz-agent-comms": {
+      "autoUpdate": true,
+      "source": {
+        "repo": "cwschroeder/buzz-agent-comms",
+        "source": "github"
+      }
+    }
+  }
+}

@@ -185,15 +185,21 @@ dropping failures, limits, the canonical URL, commit/build or test evidence.
   code and fenced code. It does not render Mermaid or raw HTML; `<details>`,
   `<summary>` and similar tags appear as literal text. Render a diagram to a
   checked image; use a narrow fenced text diagram only as fallback.
-- A result above roughly 150 words needs visible structure: a lead paragraph,
-  then `## Belege` (or a similar heading) with a list or table. The helper hints
-  when a long text has neither.
+- Read the sibling `show-me` skill before every substantive result. A sequence,
+  dependency, architecture or decision path requires a rendered diagram; use
+  installed `archify`, then the bundled sketch fallback. This applies to short
+  results too. Explain any rendering failure and provide a readable text diagram.
+- A Buzz update above 150 words needs visible structure: at least two list items,
+  a Markdown table with a header, separator and data row, or a Markdown image.
+  The helper refuses unstructured long text. A heading or a list inside code
+  does not satisfy this check. An image does not prove the visual rule was met:
+  inspect its content and explain the relationship it shows.
 - Give each attachment a caption explaining what to notice. The message must still
   be understandable without opening the image.
 - Start messages and minor progress updates can remain one sentence. Do not
   manufacture diagrams, numbers or stories to fill a template.
-- The helper enforces length: above 150 words it prints hints, above 300 it
-  refuses the update. Shorten first (answer first, numbered questions, attach
+- The helper enforces structure above 150 words and refuses length above 300
+  words. Shorten first (answer first, numbered questions, attach
   long material as a file or link it). On Buzz, text inside `<details>` counts
   and the helper warns about the tag, because Buzz cannot fold it. A deliberate long update names
   its reason in `KOMM_LANG="<reason>"`. The same check serves other channels:

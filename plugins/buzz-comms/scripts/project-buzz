@@ -56,7 +56,7 @@ MARKER_RE = re.compile(
 CLOSING_PHASES = ("result", "blocked", "correction")
 
 MAX_CONTENT = 16000
-HELPER_VERSION = "0.25.0"
+HELPER_VERSION = "0.26.0"
 FORBIDDEN_IN_CONTENT = ("[PILOT-", "[AGENT-")
 LIFECYCLE_PHASES = ("start", "progress", "blocked", "result")
 GERMAN_ASCII_SUBSTITUTION_RE = re.compile(
@@ -845,6 +845,46 @@ def komm_words(text: str) -> int:
     return len(re.findall(r"[0-9A-Za-zÄÖÜäöüß][\w.,/%€-]*", text))
 
 
+def komm_has_structure(content: str) -> bool:
+    """Recognize visible lists, Markdown tables or images, excluding code."""
+    lines = []
+    fence = ""
+    for line in content.splitlines():
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
+        if fence:
+            if (
+                marker
+                and marker.group(1)[0] == fence[0]
+                and len(marker.group(1)) >= len(fence)
+                and not marker.group(2).strip()
+            ):
+                fence = ""
+            continue
+        if marker:
+            fence = marker.group(1)
+            continue
+        if line.startswith(("    ", "\t")):
+            continue
+        lines.append(strip_inline_code_spans(line))
+    visible = "\n".join(lines)
+    if re.search(r"!\[[^\]]+\]\([^\s)]+\)", visible):
+        return True
+    if len(re.findall(r"^ {0,3}(?:[-*+] |\d+[.)] )\S", visible, flags=re.M)) >= 2:
+        return True
+    for index, line in enumerate(lines[1:], 1):
+        cells = line.strip().strip("|").split("|")
+        if len(cells) >= 2 and all(
+            re.fullmatch(r"\s*:?-{3,}:?\s*", cell) for cell in cells
+        ):
+            if (
+                "|" in lines[index - 1]
+                and index + 1 < len(lines)
+                and "|" in lines[index + 1]
+            ):
+                return True
+    return False
+
+
 def komm_check(content: str, profile: str, reason: str = "") -> Tuple[List[str], List[str]]:
     """Return (errors, warnings) for a reader-facing text."""
     limits = KOMM_PROFILES[profile]
@@ -906,12 +946,17 @@ def komm_check(content: str, profile: str, reason: str = "") -> Tuple[List[str],
     if (
         profile == "buzz"
         and words > limits["warn"]
-        and not re.search(r"^\s*([-*]|\d+[.)]|\||#)|!\[[^\]]*\]\([^)]*\)", content, flags=re.M)
+        and not komm_has_structure(content)
     ):
-        warnings.append(
-            "Langer Text ohne Liste, Tabelle oder Überschrift. Belege als Liste, "
-            "Vergleich als Tabelle, Ablauf als Skizze (project-buzz skizze)."
+        message = (
+            "Langer Text ohne echte Liste, Tabelle oder Bild. Eine Überschrift "
+            "allein genügt nicht. Belege als Liste, Vergleich als Tabelle, "
+            "Ablauf als Skizze (project-buzz skizze)."
         )
+        if reason.strip():
+            warnings.append(message + " Ausnahme: " + reason.strip())
+        else:
+            errors.append(message)
     if (
         profile == "jira"
         and words > limits["warn"]

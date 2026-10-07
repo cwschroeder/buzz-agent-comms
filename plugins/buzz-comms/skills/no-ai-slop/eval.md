@@ -65,7 +65,10 @@ Prüfe bei substanziellen Ergebnisbeiträgen zusätzlich:
 
 - Erklärt der erste Absatz eine konkrete Wirkung für den Leser?
 - Vergleicht eine Verhaltensänderung Vorher und Nachher am selben Fall, oder benennt der Text den fehlenden früheren Nachweis?
+- Wurde vor dem Schreiben die passende Form mit `show-me` gewählt?
 - Sind getrennte Änderungen und Vergleiche durch passende Listen oder Tabellen leicht erfassbar?
+- Zeigt ein Beitrag über Ablauf, Abhängigkeiten, Architektur oder einen Entscheidungsweg ein geprüftes Diagramm, auch bei kurzem Text? Wurde bei fehlendem oder fehlerhaftem Archify die eingebaute Skizze genutzt, bei gescheitertem Rendern der Grund mit einem lesbaren Textdiagramm genannt?
+- Enthält ein Buzz-Text über 150 Wörter eine echte Liste, Tabelle oder ein Bild? Eine Überschrift allein und Listen im Code erfüllen diese Prüfung nicht.
 - Erklärt eine Bildunterschrift, worauf der Leser achten soll, und bleibt die Aussage ohne Bild verständlich?
 - Sind Konzeptbilder als solche gekennzeichnet und alle Zahlen, Screenshots und Lieferbehauptungen belegt?
 

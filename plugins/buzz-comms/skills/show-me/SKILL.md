@@ -34,6 +34,13 @@ and present it as proof of the old or new application.
 
 ## Diagrams and optional tools
 
+Before writing a substantive result, choose its format from the table above.
+A result that explains a sequence, dependencies, an architecture or a decision
+path must include one rendered diagram, even when its text is short. A comparison
+of independent options usually needs a table. Several independent findings need
+a list. Use verified content; the diagram must explain a relationship the reader
+would otherwise have to reconstruct from prose.
+
 For a meaningful flow or architecture change, use the installed `archify` skill:
 read its instructions, build from verified facts, validate, export a PNG and
 inspect its labels, arrows and readability. Attach the image; an interactive HTML
@@ -46,8 +53,11 @@ specialized skills when required. Label generated work `Concept` (German:
 contract for customer data and cloud processing. Do not automatically start paid
 generation for routine updates; respect the user's authorization and budget.
 
-These tools are optional and are not bundled with this plugin. If unavailable,
-use a truthful text comparison, a small table or a narrow fenced ASCII diagram.
+These tools are optional and are not bundled with this plugin. If `archify` is
+missing, its validation fails or its export is unreadable, use the bundled
+`project-buzz skizze` for supported flows, decisions and timelines. If rendering
+fails too, state that limitation and use a narrow fenced ASCII diagram. For
+relationships beyond the sketch formats, use a labelled text diagram.
 Do not auto-install tools, invent commands or claim an export succeeded.
 Buzz does not render Mermaid. For a decision, a flow or a timeline, the bundled
 `project-buzz skizze <spec.json>` renders a PNG without a browser; attach that.
@@ -67,3 +77,15 @@ If rendering is unavailable, prefer a readable text diagram over raw Mermaid.
 - Keep text diagrams below 80 columns and inside fenced blocks.
 - Apply the public `no-ai-slop` profile and checklist to captions as well as prose.
   Preserve useful lists and comparisons during the plain-language pass.
+
+## Bundled flow example
+
+The synthetic fixture [update-flow.json](update-flow.json) can be rendered without
+installing another skill:
+
+```bash
+project-buzz skizze "${CLAUDE_PLUGIN_ROOT}/skills/show-me/update-flow.json" --out update-flow
+```
+
+Inspect the returned PNG before attaching it. For a live result, replace the
+fixture with verified project facts and label pending steps as pending.

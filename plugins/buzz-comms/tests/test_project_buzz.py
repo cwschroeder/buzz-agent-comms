@@ -456,13 +456,28 @@ class KommCheck(HelperTestCase):
         self.assertNotIn("<details>", errors[0])
         self.assertTrue(any("zeigt <details> als Text" in w for w in warnings))
 
-    def test_long_buzz_prose_without_structure_gets_a_structure_hint(self):
+    def test_long_buzz_update_requires_visible_structure_before_send(self):
         prose = " ".join(["Der Stand ist geprüft."] * 45)
-        _, warnings = project_buzz.komm_check(prose, "buzz")
-        self.assertTrue(any("ohne Liste, Tabelle oder Überschrift" in w for w in warnings))
-        structured = "Nicht live.\n\n## Belege\n\n" + "\n".join(["- Der Stand ist geprüft."] * 45)
-        _, warnings = project_buzz.komm_check(structured, "buzz")
-        self.assertFalse(any("ohne Liste, Tabelle oder Überschrift" in w for w in warnings))
+        for prefix in ("", "## Belege\n\n", "```text\n- Scheinstruktur\n```\n\n", "~~~text\n- Eins\n- Zwei\n~~~\n\n"):
+            with self.subTest(prefix=prefix):
+                self.assertEqual(1, self.run_cli(["result", "u-structure", "a" * 64, prefix + prose]))
+                self.assertEqual([], self.calls())
+
+    def test_lists_tables_and_images_allow_long_update(self):
+        prose = " ".join(["Der Stand ist geprüft."] * 45)
+        for structure in ("- Erster Befund\n- Zweiter Befund", "| Fall | Stand |\n|---|---|\n| Eins | geprüft |", "![Geprüfter Ablauf](https://example.com/flow.png)"):
+            with self.subTest(structure=structure):
+                self.assertEqual(0, self.run_cli(["result", "u-good-" + str(len(structure)), "a" * 64, prose + "\n\n" + structure]))
+
+    def test_heading_single_bullet_and_fake_table_do_not_count(self):
+        for structure in ("## Belege", "- Ein Befund", "| Wort | Wort |", "`- Eins`\n`- Zwei`", "    - Eins\n    - Zwei", "~~~\n![Bild](example.png)\n~~~"):
+            with self.subTest(structure=structure):
+                self.assertFalse(project_buzz.komm_has_structure(structure))
+
+    def test_jira_structure_remains_advisory(self):
+        prose = " ".join(["Der Stand ist geprüft."] * 30)
+        errors, _ = project_buzz.komm_check(prose, "jira")
+        self.assertEqual([], errors)
 
     def test_named_reason_turns_rejection_into_hint(self):
         errors, warnings = project_buzz.komm_check(self.LONG, "jira", "Protokoll")
