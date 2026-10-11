@@ -49,7 +49,10 @@ lokalen Helper für signierte, deduplizierte Buzz-Nachrichten.
   nennt den Lieferstatus im ersten Absatz. Verhaltensänderungen zeigen Vorher
   und Nachher am selben Fall; getrennte Änderungen stehen als kurze Liste.
 - Nutzt mit `show-me` passende Bildanhänge: vergleichbare Screenshots, gerenderte
-  Ablaufdiagramme oder echte Bildschirmaufnahmen. Archify und Higgsfield sind
+  Ablaufdiagramme oder echte Bildschirmaufnahmen. Wo Reihenfolge oder Zeit den
+  Kern ausmachen, schreibt der Agent eine kurze Animation als Code, rendert sie
+  Bild für Bild mit Headless-Chrome und hängt sie als MP4 an
+  (`skills/show-me/motion.md`). Archify und Higgsfield sind
   optionale, getrennt installierte Werkzeuge. Generierte Konzepte sind als solche
   gekennzeichnet und dienen nicht als Produktnachweis.
 - Bündelt den `/bro`-Skill (vendiert, MIT von
@@ -97,7 +100,7 @@ lokalen Helper für signierte, deduplizierte Buzz-Nachrichten.
 | `engineering-contract` | Zwölf Regeln der Arbeitsdisziplin, Worktrees, Merge Requests, Maintainer-Rollen, Beiträge über das Buzz-Git-Remote, prüfbare Sicherheitsregeln, Impeccable und lokale KI bei Kundendaten |
 | `buzz-team-communication` | Verbindlicher Kommunikations- und Delivery-Proof-Workflow |
 | `no-ai-slop` | Redigiert jeden Lifecycle-Text, bevor er im Kanal landet |
-| `show-me` | Wählt Vergleiche, Screenshots, gerenderte Diagramme oder Aufnahmen; bietet Text-Fallbacks ohne zusätzliche Werkzeuge |
+| `show-me` | Wählt Vergleiche, Screenshots, gerenderte Diagramme, als Code gerenderte Animationen oder Aufnahmen; bietet Text-Fallbacks ohne zusätzliche Werkzeuge |
 | `bro` | Erklärt die letzte Antwort in klarer Sprache neu (MIT, vendiert aus `luchasarie/bro-skill`) |
 | `ponytail-review` | Prüft einen Diff auf belegte, vermeidbare Komplexität (MIT, angepasst aus `DietrichGebert/ponytail`) |
 | `c4-model` | Baut `docs/ARCHITECTURE.md` nach Simon Browns C4-Modell (MIT, vendiert, Cherif Toujeni) |

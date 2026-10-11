@@ -1,6 +1,6 @@
 ---
 name: show-me
-description: Make Buzz updates concrete with before/after comparisons, useful lists, screenshots, rendered diagrams or short recordings. Use before substantive result posts and whenever the user wants a change or concept shown visually.
+description: Make Buzz updates concrete with before/after comparisons, useful lists, screenshots, rendered diagrams, short code-rendered animations or recordings. Use before substantive result posts and whenever the user wants a change, flow or concept shown visually.
 ---
 
 # Show Me
@@ -19,6 +19,7 @@ Do not force an image into a start message or a minor status update.
 | Process, dependency or architecture | Rendered diagram; use installed `archify` when available |
 | Measured performance or quality | Small table or chart with units and test conditions |
 | Multi-step interaction | Short recording of the real application |
+| Sequence where order or timing is the point | Short code-rendered animation, see [motion.md](motion.md) |
 | Proposed behavior or explanatory concept | Clearly labelled concept illustration or animation |
 
 ## Before and after
@@ -46,7 +47,10 @@ read its instructions, build from verified facts, validate, export a PNG and
 inspect its labels, arrows and readability. Attach the image; an interactive HTML
 file may accompany it, but a local `file://` URL is not a usable channel link.
 
-For a requested concept illustration or explanatory animation, an installed
+For explanatory motion, write the animation as code and render it yourself as
+described in [motion.md](motion.md): it costs nothing, every frame is
+reproducible, and you can check it frame by frame before posting. For a requested
+concept illustration that code cannot draw, an installed
 `higgsfield-generate` skill can help. Read its routing instructions and use its
 specialized skills when required. Label generated work `Concept` (German:
 `Konzept`) and keep it separate from product evidence. Follow the engineering
@@ -89,3 +93,11 @@ project-buzz skizze "${CLAUDE_PLUGIN_ROOT}/skills/show-me/update-flow.json" --ou
 
 Inspect the returned PNG before attaching it. For a live result, replace the
 fixture with verified project facts and label pending steps as pending.
+
+## Bundled motion example
+
+[motion-example.html](motion-example.html) is a synthetic six-second loop that
+follows the render contract in [motion.md](motion.md). Open it in a browser to
+preview it, or append `?frame=84` to freeze one frame. Capture, encode and check
+it with the commands in [motion.md](motion.md), then replace the content with
+verified project facts.

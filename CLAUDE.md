@@ -63,7 +63,9 @@ plugins/buzz-comms/
 │   ├── eval.md                          #   the post-edit checklist
 │   └── LICENSE                          #   keep this file with any copy
 ├── skills/show-me/                      # compact visuals for channel posts
-│   └── SKILL.md                         #   comparisons and rendered media
+│   ├── SKILL.md                         #   comparisons and rendered media
+│   ├── motion.md                        #   code-rendered MP4/GIF for Buzz
+│   └── motion-example.html              #   synthetic render-contract fixture
 ├── skills/bro/                          # vendored MIT luchasarie/bro-skill
 │   ├── SKILL.md                         #   /bro: plain-language re-explainer
 │   └── LICENSE                          #   keep this file with any copy

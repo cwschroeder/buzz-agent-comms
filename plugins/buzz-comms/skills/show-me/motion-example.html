@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Beispiel: Lebenszyklus eines Updates</title>
+<!--
+  Synthetic show-me motion fixture. Every frame is a pure function of the frame
+  number: no clock, no randomness, no network. Open motion-example.html?frame=84
+  to freeze frame 84; open it without a parameter to preview the loop.
+-->
+<style>
+  html, body { margin: 0; background: #f8fafc; }
+  svg { display: block; }
+  text { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+</style>
+</head>
+<body>
+<svg id="stage" width="960" height="540" viewBox="0 0 960 540" xmlns="http://www.w3.org/2000/svg">
+  <text x="64" y="76" font-size="30" font-weight="700" fill="#0f172a">Beispiel: Lebenszyklus eines Updates</text>
+  <text x="64" y="110" font-size="18" fill="#475569">Ein Thread, drei Phasen, ein belegtes Ergebnis</text>
+  <line x1="104" y1="170" x2="104" y2="470" stroke="#cbd5e1" stroke-width="4" stroke-linecap="round"/>
+  <g id="cards"></g>
+</svg>
+<script>
+  const FPS = 30;
+  const FRAMES = 180; // 6 s loop; render frames 0 to FRAMES - 1, never FRAMES.
+  const CARDS = [
+    { y: 170, start: 15, label: "Start", text: "Ich setze die Regel um und teste sie.", fill: "#dbeafe", ink: "#1d4ed8" },
+    { y: 270, start: 45, label: "Fortschritt", text: "Tests grün, Merge steht aus.", fill: "#fef3c7", ink: "#b45309" },
+    { y: 370, start: 75, label: "Ergebnis: Live", text: "Gemergt, ausgerollt und extern geprüft.", fill: "#ccfbf1", ink: "#0f766e" },
+  ];
+  const EXIT_START = 150; // exits run 10 frames, shorter than the 14-frame entrances
+  const clamp = (v) => Math.min(1, Math.max(0, v));
+  const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
+  const easeInCubic = (t) => t * t * t;
+  const easeOutBack = (t) => 1 + 2.2 * Math.pow(t - 1, 3) + 1.2 * Math.pow(t - 1, 2);
+
+  function renderFrame(frame) {
+    const f = ((frame % FRAMES) + FRAMES) % FRAMES;
+    const exit = easeInCubic(clamp((f - EXIT_START) / 10));
+    const parts = [];
+    for (const card of CARDS) {
+      const dot = easeOutBack(clamp((f - card.start) / 8)) * (1 - exit);
+      const reveal = easeOutQuint(clamp((f - card.start - 4) / 14)) * (1 - exit);
+      const width = 760 * reveal;
+      const id = "clip" + card.start;
+      parts.push(
+        `<circle cx="104" cy="${card.y + 34}" r="${11 * dot}" fill="${card.ink}"/>`,
+        `<clipPath id="${id}"><rect x="140" y="${card.y}" width="${width}" height="68" rx="12"/></clipPath>`,
+        `<g clip-path="url(#${id})">`,
+        `<rect x="140" y="${card.y}" width="760" height="68" rx="12" fill="${card.fill}"/>`,
+        `<text x="164" y="${card.y + 42}" font-size="21" font-weight="700" fill="${card.ink}">${card.label}</text>`,
+        `<text x="356" y="${card.y + 42}" font-size="20" fill="#0f172a">${card.text}</text>`,
+        `</g>`
+      );
+    }
+    document.getElementById("cards").innerHTML = parts.join("");
+  }
+
+  window.renderFrame = renderFrame;
+  const requested = new URLSearchParams(location.search).get("frame");
+  if (requested !== null) {
+    renderFrame(Number(requested));
+  } else {
+    // Preview only. Captures always pass ?frame=N, so the clock never reaches a render.
+    let frame = 0;
+    renderFrame(frame);
+    setInterval(() => renderFrame(++frame), 1000 / FPS);
+  }
+</script>
+</body>
+</html>

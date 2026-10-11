@@ -178,7 +178,8 @@ dropping failures, limits, the canonical URL, commit/build or test evidence.
   edit must preserve structure that helps the reader.
 - Choose the smallest useful visual with the sibling `show-me` skill: comparable
   screenshots for UI changes, a rendered diagram for a flow, a chart for measured
-  results, or a short real recording for an interaction.
+  results, a short real recording for an interaction, or a short code-rendered
+  animation when order or timing is the point (`show-me/motion.md`).
 - Images go through the existing top-level attachment workflow. One focused visual
   unit is usually enough; a before/after pair counts as one comparison.
 - Buzz renders GitHub-flavoured Markdown: headings, lists, tables, bold, inline
