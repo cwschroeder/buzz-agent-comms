@@ -22,7 +22,7 @@ Schreibe kompakte Projektupdates, die Kollegen schnell erfassen und deren Aussag
 - **Fortschritt:** Nenne den abgeschlossenen Zwischenstand und die bisher verfügbaren Belege. Erwähne eine Planänderung nur, wenn sie für andere Beteiligte wichtig ist.
 - **Blockiert:** Beginne mit `Nicht live:` oder dem konkreten Blocker. Nenne fehlendes Review, Zugangsdaten, Abhängigkeit oder Entscheidung sowie die nächste Handlung oder den Verantwortlichen, sofern bekannt.
 - **Ergebnis:** Beginne mit der konkreten Änderung für den Leser. Nenne im ersten Absatz den belegten Zustand `Review-ready`, `Merged`, `Deployed` oder `Extern verifiziert`; solange die Änderung nicht live ist, steht `Nicht live` am Anfang. Bei Verhaltensänderungen vergleiche Vorher und Nachher am selben Fall. Stelle danach die technischen Belege kompakt zusammen: kanonische URL, Commit oder Build und Test oder Messwert, soweit für die Arbeit vorhanden. Eine Diagnose nennt ihre Belegtiefe: gemessen und womit es abgeglichen wurde, oder dass sie eine Einschätzung statt einer Messung ist. Eine reine Prüfung oder ein Entwurf erhält keinen erfundenen Auslieferungsstatus.
-- **Korrektur:** Beginne in einer Zeile mit der falschen früheren Aussage und nenne danach die jetzt gültige Aussage. Veröffentliche die Korrektur als Top-Level-Beitrag mit `Korrigiertes Event: <id>`, damit Leser sie dem ersetzten Event zuordnen können. Auch Diagnosen nennen hier ihre Belegtiefe.
+- **Korrektur:** Beginne in einer Zeile mit der falschen früheren Aussage und nenne danach die jetzt gültige Aussage. Veröffentliche die Korrektur mit `project-buzz correct` als Top-Level-Beitrag; der Helper hängt `Korrigiertes Event:` mit einem Link auf das ersetzte Event an. Auch Diagnosen nennen hier ihre Belegtiefe.
 
 ## Vermeiden
 

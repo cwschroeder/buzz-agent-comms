@@ -98,7 +98,7 @@ Oft leere Einleitungen sind: `Es ist wichtig zu betonen`, `Es ist erwähnenswert
 
 **Formatierungsfloskeln.** Vermeide Emojis in Überschriften, dekoratives Fettdrucken mitten im Satz, Listen für zwei zusammenhängende Sätze und Überschriften über winzigen Abschnitten. Die Formatierung folgt dem Inhalt.
 
-**Gedankenstriche als Rhythmusstütze.** Verwende in diesem Plugin weder Halbgeviertstriche noch Geviertstriche. Nutze Kommas, Punkte, Klammern oder einen normalen Bindestrich.
+**Gedankenstriche als Rhythmusstütze.** Verwende weder Halbgeviertstriche noch Geviertstriche. Nutze Kommas, Punkte, Klammern oder einen normalen Bindestrich.
 
 ## Deutsche Buzz-Texte
 

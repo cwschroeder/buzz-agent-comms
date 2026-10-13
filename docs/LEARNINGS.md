@@ -152,3 +152,37 @@ benennen den Eintrag, den sie richtigstellen. Nichts wird gelöscht.
 - Die längsten Buzz-Texte kamen seit dem 26.09. nicht aus diesem Plugin, sondern
   aus der FirstMate-/Repo-Agent-Pipeline in `codeapp` (Ergebnis-Median 377
   Wörter). Plugin-Regeln erreichen diese Agenten nur über ihr Profil.
+
+## 2026-10-13 - Die Zeitleiste zeigt nur Thread-Wurzeln (claude)
+
+- Kollegen-Agents hielten die Strukturregeln ein: Ihre `result`-Posts hatten
+  Tabellen, Listen und Vorher/Nachher. Sie lagen aber als Thread-Antwort hinter
+  „1 reply“. Sichtbar blieben nur Start-Posts und Korrekturen, jeweils hinter
+  rund 95 Zeichen Marker. Weitere Inhaltsregeln hätten daran nichts geändert.
+- Der Marker steht jetzt als Markdown-Linkdefinition (`<marker>: #`, Leerzeile)
+  in der ersten Zeile. Der Desktop-Renderer zeigt sie nicht an, im Mock per
+  `just desktop-screenshot` geprüft. Mobil ist nicht geprüft.
+- Das Buzz-Tag `broadcast` (`--im-kanal`) zeigt eine Antwort auch in der
+  Zeitleiste. Desktop und Mobil melden sie aber an alle Mitglieder mit hoher
+  Priorität, auch bei stummgeschaltetem Kanal; deshalb nur auf Wunsch.
+- Die CLI-Hilfe zu `--broadcast` („Also publish to the Nostr network“) ist
+  irreführend: Das Relay wertet das Tag nur als Thread-Metadatum aus.
+
+## 2026-10-13 - Relay lehnt PNGs mit Metadaten ab (claude.repo-agent)
+
+- Wie bei MP4 am 2026-10-11 gilt auch für PNGs: Das Relay antwortet mit
+  HTTP 422 „media contains metadata or a non-canonical metadata channel“.
+- Weder qlmanage (SVG-Thumbnail) noch ein sips-Reencode entfernen die
+  betreffenden Chunks. Was geht: die PNG-Struktur selbst parsen und nur
+  IHDR, IDAT, IEND neu schreiben. Danach ging der Upload durch
+  (Bild-Event `1e849e4b`).
+
+## 2026-10-13 - Nachtrag: Marker auf Buzz mobil (claude)
+
+- Korrektur zu „Mobil ist nicht geprüft“: Die mobile App rendert mit
+  `gpt_markdown` 1.2.1. Das Paket kennt nur Inline-Links `[..](..)`, keine
+  Linkdefinitionen, und die App bereitet den Text nicht vor. Auf dem Handy
+  bleibt die Marker-Zeile sichtbar, jetzt als eigene erste Zeile. Abhilfe nur
+  über die App selbst (Upstream).
+- PNG ohne Metadaten geht auch mit Pillow: Bild in ein neues `Image` kopieren
+  und speichern, dann fehlen ICC-Profil und Text-Chunks.

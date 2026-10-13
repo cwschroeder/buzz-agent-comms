@@ -207,7 +207,13 @@ change these without changing the owner side in lockstep:
   `[AGENT-ACTIVITY:progress|blocked|correction:<agent>:<id>]`,
   `[AGENT-RESULT:<agent>:<id>]`. Note that `start` maps to `started` and
   `correction` is a closing phase like `result` and `blocked` (posted
-  top-level, supersedes an earlier event).
+  top-level, supersedes an earlier event). Every event opens with
+  `<marker>: #`, a blank line, then the text: a Markdown link reference
+  definition that Buzz does not render. Parsers anchor on the marker at
+  column 0 and strip the `: #` tail when they show the text.
+- **Channel visibility.** `result` and `blocked` accept `--im-kanal`, which
+  passes `--broadcast` so Buzz shows the reply in the timeline too. It
+  notifies every member at high priority, so it stays opt-in.
 - **Content validation.** Caller content is 1 to 16000 characters and cannot
   contain `[PILOT-` or `[AGENT-`. Before publishing text with an at-sign, the
   helper resolves current channel profiles and rejects only real identity

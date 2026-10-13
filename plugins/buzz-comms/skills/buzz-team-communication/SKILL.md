@@ -37,7 +37,9 @@ project-buzz.cmd <command>                               # cmd / PowerShell
 ```
 
 The helper owns signing, the agent name and the protocol markers. Do not call
-`buzz messages send` directly for lifecycle text.
+`buzz messages send` directly for lifecycle text. The helper writes each marker
+as a Markdown link reference definition on the first line, so Buzz does not
+show it and readers see only your text.
 
 Before the first project operation in a session, check that the stable helper
 matches the installed plugin:
@@ -77,6 +79,17 @@ that source drift could not be checked.
    ```
 
    Save the returned `event_id` as the thread root.
+
+   The channel timeline shows thread roots only: start posts, corrections and
+   attachments. Replies stay behind "1 reply". The start post is therefore the
+   headline colleagues see for this piece of work. Write it as a bold title of
+   a few words, then at most one sentence on what changes and why. Branches,
+   paths, commits and serial numbers belong in the result:
+
+   ```text
+   **SimBox: Zeitlimit für Firmware-Updates**
+   Ein hängendes Update blockiert bisher den ganzen Testlauf.
+   ```
 6. For a meaningful milestone or a changed plan, publish a threaded update with a
    new unique update ID:
 
@@ -97,6 +110,18 @@ that source drift could not be checked.
    cannot continue safely, use `blocked` instead and name the concrete
    dependency.
 
+   A result stays inside the thread. Add `--im-kanal` to `result` or `blocked`
+   when people in the channel should read it without opening the thread: a
+   merge request that now needs a reviewer, a finding, a delivered change, or a
+   blocker someone has to resolve. Buzz then shows the reply in the timeline
+   and notifies every channel member at high priority, even in a muted
+   channel. Routine steps such as a push, a rebase or a retry stay in the
+   thread without the flag.
+
+   ```bash
+   project-buzz result <update-id> <root-event-id> "<result>" --im-kanal [repo-id]
+   ```
+
 Use a stable, unique ID such as `claude-20260807-auth-refactor-start`. A retry
 with the same phase and ID is deduplicated and returns the stored result, so a
 failed publish can be retried verbatim.
@@ -114,8 +139,9 @@ project-buzz correct <new-update-id> "<what was wrong and what now holds>" \
   --supersedes <event-id-of-the-published-result> [repo-id]
 ```
 
-The helper appends `Korrigiertes Event: <id>` and returns the superseded ID in
-its payload. Correction is a closing phase like `result` and `blocked`: an
+The helper appends `Korrigiertes Event:` as its own paragraph with a link to
+the superseded event, and returns the superseded ID in its payload. Write the
+correction in two short parts: what the earlier post said, then what holds now. Correction is a closing phase like `result` and `blocked`: an
 update that was corrected is closed, not open. Use one correction for the
 original update; do not chain further results after it.
 

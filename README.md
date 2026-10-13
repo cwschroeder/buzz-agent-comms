@@ -515,8 +515,8 @@ project-buzz context [repo-id] [limit]
 project-buzz open [repo-id] [limit]
 project-buzz start <update-id> <text> [repo-id]
 project-buzz progress <update-id> <root-event-id> <text> [repo-id]
-project-buzz blocked <update-id> <root-event-id> <text> [repo-id]
-project-buzz result <update-id> <root-event-id> <text> [repo-id]
+project-buzz blocked <update-id> <root-event-id> <text> [--im-kanal] [repo-id]
+project-buzz result <update-id> <root-event-id> <text> [--im-kanal] [repo-id]
 project-buzz correct <update-id> <text> --supersedes <event-id> [repo-id]
 project-buzz attach <update-id> <text> <files...> [--repo-id <repo-id>]
 project-buzz doctor
@@ -524,9 +524,15 @@ project-buzz --version
 ```
 
 `start`, `progress`, `blocked` und `result` bilden den normalen Lifecycle.
+Der Helper schreibt den Protokoll-Marker als Markdown-Linkdefinition in die
+erste Zeile; Buzz zeigt sie nicht an, Leser sehen nur den Text. Die
+Kanal-Zeitleiste zeigt nur Thread-Wurzeln, also Start-Posts, Korrekturen und
+Anhänge. `--im-kanal` zeigt ein `result` oder `blocked` zusätzlich dort an und
+benachrichtigt dabei alle Mitglieder mit hoher Priorität.
 `correct` widerruft ein bereits publiziertes Ergebnis als eigenen
-Top-Level-Post: Der Helper fügt `Korrigiertes Event: <id>` hinzu und schließt
-damit den betroffenen Thread aus der `open`-Sicht. `open` gruppiert Nachrichten
+Top-Level-Post: Der Helper hängt `Korrigiertes Event:` mit Link auf das
+ersetzte Event an und schließt damit den betroffenen Thread aus der
+`open`-Sicht. `open` gruppiert Nachrichten
 über die Reply-`e`-Tags zu Threads und listet jene, die mit einem Start begannen,
 aber noch kein `result`, `blocked` oder `correct` erreicht haben (Standard-Limit
 100, maximal 200).

@@ -212,7 +212,9 @@ class MarkerFormat(HelperTestCase):
         os.chdir(self.workspace)
         self.assertEqual(0, self.run_cli(["start", "u-1", "Beginne Arbeit"]))
         self.assertTrue(
-            self.sent_content().startswith("[AGENT-ACTIVITY:started:claude.stratos:u-1] ")
+            self.sent_content().startswith(
+                "[AGENT-ACTIVITY:started:claude.stratos:u-1]: #\n\n"
+            )
         )
 
     def test_result_marker_matches_the_pilot_protocol(self):
@@ -220,7 +222,33 @@ class MarkerFormat(HelperTestCase):
         root = "a" * 64
         self.assertEqual(0, self.run_cli(["result", "u-2", root, "Fertig"]))
         self.assertEqual(
-            "[AGENT-RESULT:claude.stratos:u-2] Fertig", self.sent_content()
+            "[AGENT-RESULT:claude.stratos:u-2]: #\n\nFertig", self.sent_content()
+        )
+
+    def test_marker_line_is_a_definition_readers_do_not_see(self):
+        # CommonMark drops a link reference definition from the rendered
+        # output. The definition must sit alone on the first line and a blank
+        # line must end it, or a quoted first line would become its title.
+        os.chdir(self.workspace)
+        root = "a" * 64
+        text = '"Zitat" am Anfang\n\n- Punkt'
+        self.assertEqual(0, self.run_cli(["result", "u-7", root, text]))
+        first, blank, rest = self.sent_content().split("\n", 2)
+        self.assertRegex(first, r"^\[AGENT-RESULT:claude\.stratos:u-7\]: #$")
+        self.assertEqual("", blank)
+        self.assertEqual(text, rest)
+
+    def test_parsers_still_find_the_marker_at_the_start(self):
+        os.chdir(self.workspace)
+        self.assertEqual(0, self.run_cli(["start", "u-8", "Beginne Arbeit"]))
+        content = self.sent_content()
+        match = project_buzz.parse_marker(content)
+        self.assertEqual(0, match.start())
+        self.assertEqual(
+            ("started", "claude.stratos", "u-8"), match.groups()
+        )
+        self.assertEqual(
+            "Beginne Arbeit", project_buzz.text_after_marker(content, match)
         )
 
     def test_progress_and_blocked_use_the_phase_in_the_marker(self):
@@ -234,6 +262,25 @@ class MarkerFormat(HelperTestCase):
         self.assertTrue(
             self.sent_content(1).startswith("[AGENT-ACTIVITY:blocked:claude.stratos:u-4]")
         )
+
+    def test_im_kanal_broadcasts_a_closing_reply(self):
+        os.chdir(self.workspace)
+        root = "a" * 64
+        self.run_cli(["result", "u-9", root, "Fertig", "--im-kanal"])
+        self.run_cli(["blocked", "u-10", root, "Warte", "--im-kanal"])
+        self.run_cli(["result", "u-11", root, "Fertig"])
+        sends = [c for c in self.calls() if c[:2] == ["messages", "send"]]
+        self.assertIn("--broadcast", sends[0])
+        self.assertIn("--broadcast", sends[1])
+        self.assertNotIn("--broadcast", sends[2])
+
+    def test_im_kanal_is_not_offered_for_start_or_progress(self):
+        os.chdir(self.workspace)
+        with self.assertRaises(SystemExit):
+            self.run_cli(["start", "u-12", "Los", "--im-kanal"])
+        with self.assertRaises(SystemExit):
+            self.run_cli(["progress", "u-13", "a" * 64, "Weiter", "--im-kanal"])
+        self.assertEqual([], [c for c in self.calls() if c[:2] == ["messages", "send"]])
 
     def test_reply_to_is_passed_for_threaded_phases_only(self):
         os.chdir(self.workspace)
@@ -1289,12 +1336,17 @@ class CorrectionPhase(HelperTestCase):
         self.assertNotIn("--reply-to", send)
         content = self.sent_content()
         self.assertTrue(
-            content.startswith("[AGENT-ACTIVITY:correction:claude.stratos:corr-1] ")
+            content.startswith("[AGENT-ACTIVITY:correction:claude.stratos:corr-1]: #\n\n")
         )
-        self.assertIn(
-            "Korrigiertes Event: {0}".format(superseded), content
+        # The reference is its own paragraph and links the superseded event;
+        # the full ID survives in the URL.
+        self.assertTrue(
+            content.endswith(
+                "Ergebnis bleibt.\n\nKorrigiertes Event: [aaaaaaaa]"
+                "(buzz://message?channel=11111111-1111-1111-1111-111111111111"
+                "&id={0})".format(superseded)
+            )
         )
-        self.assertNotIn("\n", content)
 
     def test_correction_requires_a_valid_superseded_event(self):
         self.assertEqual(
@@ -1318,6 +1370,13 @@ class CorrectionPhase(HelperTestCase):
         self.assertEqual(0, self.run_cli(arguments))
         sends = [c for c in self.calls() if c[:2] == ["messages", "send"]]
         self.assertEqual(1, len(sends))
+
+    def test_correction_has_no_channel_flag(self):
+        with self.assertRaises(SystemExit):
+            self.run_cli(
+                ["correct", "corr-5", "Text", "--supersedes", "a" * 64, "--im-kanal"]
+            )
+        self.assertEqual([], self.calls())
 
     def test_missing_supersedes_is_rejected_before_publish(self):
         with self.assertRaises(SystemExit):
@@ -1389,6 +1448,36 @@ class OpenView(HelperTestCase):
         payload = json.loads(stdout.getvalue())
         open_ids = [entry["update_id"] for entry in payload["open"]]
         self.assertEqual(["open-1-start"], open_ids)
+
+    def test_open_reads_the_definition_shape(self):
+        os.environ["FAKE_BUZZ_MESSAGES"] = json.dumps(
+            [
+                {
+                    "id": "r1",
+                    "tags": [["e", "r1", "", "root"]],
+                    "content": "[AGENT-ACTIVITY:started:claude.stratos:neu-1]: #\n\n**Neue Form**",
+                    "created_at": 100,
+                },
+                {
+                    "id": "r2",
+                    "tags": [["e", "r2", "", "root"]],
+                    "content": "[AGENT-ACTIVITY:started:claude.stratos:neu-2]: #\n\nErledigt",
+                    "created_at": 110,
+                },
+                {
+                    "id": "r2a",
+                    "tags": [["e", "r2", "", "reply"], ["broadcast", "1"]],
+                    "content": "[AGENT-RESULT:claude.stratos:neu-2]: #\n\nFertig",
+                    "created_at": 111,
+                },
+            ]
+        )
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            self.assertEqual(0, self.run_cli(["open"]))
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(["neu-1"], [entry["update_id"] for entry in payload["open"]])
+        self.assertEqual("**Neue Form**", payload["open"][0]["snippet"])
 
     def test_open_default_limit_and_repo_are_echoed(self):
         os.environ["FAKE_BUZZ_MESSAGES"] = "[]"

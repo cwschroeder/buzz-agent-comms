@@ -47,8 +47,10 @@ PUBKEY_RE = re.compile(r"^[0-9a-f]{64}$")
 #   [AGENT-ACTIVITY:started:<agent>:<id>]
 #   [AGENT-ACTIVITY:progress|blocked|correction:<agent>:<id>]
 #   [AGENT-RESULT:<agent>:<id>]
-# A correction is a closing phase like result and blocked: it supersedes an
-# earlier update, so it is never itself an open thread.
+# Each event opens with "<marker>: #" and a blank line: a Markdown link
+# reference definition, which Buzz does not render, so readers see only the
+# text. A correction is a closing phase like result and blocked: it supersedes
+# an earlier update, so it is never itself an open thread.
 MARKER_RE = re.compile(
     r"\[AGENT-(?:ACTIVITY:(started|progress|blocked|correction)|RESULT):"
     r"([a-z0-9][a-z0-9._-]{0,31}):([A-Za-z0-9][A-Za-z0-9._-]{0,63})\]"
@@ -56,7 +58,7 @@ MARKER_RE = re.compile(
 CLOSING_PHASES = ("result", "blocked", "correction")
 
 MAX_CONTENT = 16000
-HELPER_VERSION = "0.27.0"
+HELPER_VERSION = "0.28.0"
 FORBIDDEN_IN_CONTENT = ("[PILOT-", "[AGENT-")
 LIFECYCLE_PHASES = ("start", "progress", "blocked", "result")
 GERMAN_ASCII_SUBSTITUTION_RE = re.compile(
@@ -1140,6 +1142,22 @@ def build_marker(phase: str, agent: str, update_id: str) -> str:
     return "[AGENT-ACTIVITY:{0}:{1}:{2}]".format(phase, agent, update_id)
 
 
+def compose_payload(marker: str, content: str) -> str:
+    """Open the event with the marker as a Markdown link reference definition.
+
+    Buzz renders Markdown, and a definition line renders as nothing, so the
+    channel shows only the text a person wrote. The marker still opens the
+    event, so parsers that anchor on ``[AGENT-`` or search for the marker keep
+    working. The blank line ends the definition before the content starts, so
+    a first line in quotes or parentheses cannot be read as a link title.
+    """
+    return "{0}: #\n\n{1}".format(marker, content)
+
+
+def message_url(channel_id: str, event_id: str) -> str:
+    return "buzz://message?channel={0}&id={1}".format(channel_id, event_id)
+
+
 def lock_directory(repo_id: str, agent: str, phase: str, update_id: str) -> Path:
     root = state_root() / "publishes"
     root.mkdir(parents=True, exist_ok=True)
@@ -1153,14 +1171,23 @@ def publish(
     content: str,
     reply_to: Optional[str],
     requested_repo: Optional[str],
+    supersedes: Optional[str] = None,
+    in_channel: bool = False,
 ) -> Dict[str, Any]:
     agent = agent_name(config)
     validate_update_id(update_id)
     validate_content(content)
     if reply_to is not None:
         validate_root_event(reply_to)
+    if supersedes is not None:
+        validate_root_event(supersedes)
     repo_id, channel_id = resolve_project(config, requested_repo)
     validate_mentions(config, channel_id, content)
+    if supersedes is not None:
+        # A link reads better than 64 hex digits; the full ID stays in the URL.
+        content = "{0}\n\nKorrigiertes Event: [{1}]({2})".format(
+            content.rstrip(), supersedes[:8], message_url(channel_id, supersedes)
+        )
 
     lock = lock_directory(repo_id, agent, phase, update_id)
     stored = lock / "output.json"
@@ -1188,7 +1215,11 @@ def publish(
     ]
     if reply_to:
         args += ["--reply-to", reply_to]
-    payload = "{0} {1}".format(marker, content)
+        if in_channel:
+            # Buzz shows a broadcast reply in the channel timeline as well as
+            # in the thread, and notifies every member at high priority.
+            args.append("--broadcast")
+    payload = compose_payload(marker, content)
 
     try:
         output = run_buzz(config, args, stdin_text=payload)
@@ -1212,11 +1243,7 @@ def publish(
             "agent": agent,
             "phase": phase,
             "channel_id": channel_id,
-            "buzz_url": (
-                "buzz://message?channel={0}&id={1}".format(channel_id, event_id)
-                if event_id
-                else None
-            ),
+            "buzz_url": message_url(channel_id, event_id) if event_id else None,
         }
     )
     stored.write_text(json.dumps(payload) + "\n", encoding="utf-8")
@@ -1292,11 +1319,7 @@ def publish_attachments(
             "phase": "attachment",
             "channel_id": channel_id,
             "file_count": len(resolved_files),
-            "buzz_url": (
-                "buzz://message?channel={0}&id={1}".format(channel_id, event_id)
-                if event_id
-                else None
-            ),
+            "buzz_url": message_url(channel_id, event_id) if event_id else None,
         }
     )
     stored.write_text(json.dumps(payload) + "\n", encoding="utf-8")
@@ -1563,6 +1586,7 @@ def command_lifecycle(arguments: argparse.Namespace) -> int:
         arguments.content,
         reply_to,
         arguments.repo_id,
+        in_channel=getattr(arguments, "in_channel", False),
     )
     print(json.dumps(payload))
     return 0
@@ -1584,6 +1608,11 @@ def command_attach(arguments: argparse.Namespace) -> int:
 def parse_marker(content: str) -> Optional[re.Match]:
     """Return the lifecycle marker match for content, or None."""
     return MARKER_RE.search(content)
+
+
+def text_after_marker(content: str, match: re.Match) -> str:
+    """Return the reader text after a marker, without the definition tail."""
+    return re.sub(r"\A:[ \t]*#", "", content[match.end():]).strip()
 
 
 def thread_root(event: Dict[str, Any]) -> str:
@@ -1672,7 +1701,7 @@ def command_open(arguments: argparse.Namespace) -> int:
         if phase == "started" and not thread["snippet"]:
             thread["agent"] = agent
             thread["update_id"] = update_id
-            thread["snippet"] = content[match.end():].strip()[:120]
+            thread["snippet"] = text_after_marker(content, match)[:120]
 
     open_threads = [
         thread
@@ -1702,16 +1731,19 @@ def command_correct(arguments: argparse.Namespace) -> int:
 
     A correction is deliberately not a thread reply: Buzz renders replies only
     inside the collapsible thread panel, so a retraction that hides there stays
-    invisible in the channel timeline. The superseded event ID is appended to
-    the content as a validated reference line and echoed in the payload.
+    invisible in the channel timeline. The superseded event is appended as a
+    validated reference line linking to it, and its ID is echoed in the payload.
     """
     config = load_config()
     validate_root_event(arguments.supersedes)
-    content = "{0} Korrigiertes Event: {1}".format(
-        arguments.content.rstrip(), arguments.supersedes
-    )
     payload = publish(
-        config, "correction", arguments.update_id, content, None, arguments.repo_id
+        config,
+        "correction",
+        arguments.update_id,
+        arguments.content,
+        None,
+        arguments.repo_id,
+        supersedes=arguments.supersedes,
     )
     payload["supersedes"] = arguments.supersedes
     print(json.dumps(payload))
@@ -2059,6 +2091,14 @@ def build_parser() -> argparse.ArgumentParser:
             lifecycle.add_argument("root_event_id")
         lifecycle.add_argument("content")
         lifecycle.add_argument("repo_id", nargs="?", default=None)
+        if phase in ("result", "blocked"):
+            lifecycle.add_argument(
+                "--im-kanal",
+                dest="in_channel",
+                action="store_true",
+                help="Also show this reply in the channel timeline "
+                "(notifies every member at high priority)",
+            )
         lifecycle.set_defaults(handler=command_lifecycle, phase=phase)
 
     attach = sub.add_parser(
