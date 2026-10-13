@@ -58,7 +58,7 @@ MARKER_RE = re.compile(
 CLOSING_PHASES = ("result", "blocked", "correction")
 
 MAX_CONTENT = 16000
-HELPER_VERSION = "0.28.0"
+HELPER_VERSION = "0.28.1"
 FORBIDDEN_IN_CONTENT = ("[PILOT-", "[AGENT-")
 LIFECYCLE_PHASES = ("start", "progress", "blocked", "result")
 GERMAN_ASCII_SUBSTITUTION_RE = re.compile(
@@ -678,6 +678,11 @@ def run_buzz(
     and rejects it. Every German lifecycle message carries umlauts, so the
     default would break exactly the messages this skill requires. The same
     pinning decodes the CLI's UTF-8 JSON answer correctly.
+
+    The text goes in as UTF-8 bytes, not through a text-mode pipe: on Windows
+    text mode turns every "\n" into "\r\n", so a colleague's post would differ
+    byte for byte from everyone else's. Since 0.28.0 every post has line
+    breaks, because the marker sits on its own first line.
     """
     binary = resolve_binary(config, "buzz_bin", "buzz")
     if identity is None:
@@ -690,10 +695,9 @@ def run_buzz(
         completed = subprocess.run(
             [binary] + args,
             env=environment,
-            input=stdin_text,
+            input=None if stdin_text is None else stdin_text.encode("utf-8"),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            encoding="utf-8",
             timeout=cli_timeout(),
         )
     except subprocess.TimeoutExpired:
@@ -702,8 +706,10 @@ def run_buzz(
                 " ".join(args[:2]), cli_timeout()
             )
         )
+    stdout = completed.stdout.decode("utf-8").replace("\r\n", "\n")
+    stderr = completed.stderr.decode("utf-8").replace("\r\n", "\n")
     if completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout or "").strip()
+        detail = (stderr or stdout or "").strip()
         message = "buzz {0} failed (exit {1}): {2}".format(
             " ".join(args[:2]), completed.returncode, detail
         )
@@ -711,7 +717,7 @@ def run_buzz(
             # One line, because doctor renders this inside a JSON report.
             message = "{0} {1}".format(message, RELAY_MEMBERSHIP_HINT)
         raise UserError(message)
-    return completed.stdout
+    return stdout
 
 
 # --------------------------------------------------------------------------
