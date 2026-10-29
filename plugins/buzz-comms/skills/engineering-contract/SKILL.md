@@ -128,15 +128,48 @@ Contributors must:
 
 - implement and verify the change in their dedicated worktree;
 - commit according to the repository's signing and message rules;
-- push the task branch and create or update a merge request;
+- push the task branch and create or update a merge request that is ready for
+  review, not a draft;
 - include the verified tests, known limits, source branch, and target branch in
   the merge request;
 - stop at `Review-ready` and leave the merge to the maintainer.
+
+`Review-ready` requires the URL of that merge or pull request, and the result
+names it. A pushed branch without a request is not review-ready: nobody reviews
+it, and an agent-operated project does not see it at all, because its scanner
+reads merge requests, not branches. If the request cannot be opened (no forge
+access, no authenticated `glab`, forge unreachable), report `blocked` with that
+reason instead of `Review-ready`.
 
 Only the maintainer may merge into `master` or the repository's explicitly
 configured protected integration branch. Contributors must not enable
 auto-merge, merge their own request, push implementation commits directly to
 that branch, or describe review-ready work as merged.
+
+### Where the merge request is opened
+
+The request is opened on the forge that holds the authoritative history. For a
+project on a company forge such as the office GitLab (a remote like
+`git@gitlab.example.org:<group>/<repo>.git`), that is a GitLab merge request, opened with
+`glab` from the task worktree:
+
+```bash
+glab mr create \
+  --source-branch "$(git branch --show-current)" \
+  --target-branch master \
+  --title "fix(scope): what the change does" \
+  --description "Tests: <verified commands and results>. Limits: <known gaps>." \
+  --yes
+```
+
+Use the repository's default branch as target, `master` or `main`
+(`glab repo view` names it). Do not pass `--draft` and do not prefix the title
+with `Draft:`: a draft gets no review. Set a proxy only for the call if your
+network needs one to reach the forge API. `buzz pr open` is not a substitute on
+such a project: a Buzz pull request is not visible on the forge. It is the path
+for projects hosted only on the Buzz relay, and for a contributor without forge
+access (see below), who then names in the result that the maintainer must carry
+the change over to the forge.
 
 ### Repositories that opt out
 
@@ -258,7 +291,9 @@ consequence worth memorising:
 2. Work on a task branch, push that branch, then open the pull request with
    `buzz pr open`, including `--channel <uuid>` for the project channel.
    Without that flag the pull request carries no channel tag and reaches no
-   feed.
+   feed. If you also have access to the project's company forge, open the
+   merge request there instead, as described in "Where the merge request is
+   opened".
 3. When opening an issue, post a pointer to it in the project channel as well.
    `buzz issues create` has no channel option, so an issue is otherwise
    reachable only by polling `buzz issues list`, and it can sit unread.
@@ -266,7 +301,8 @@ consequence worth memorising:
    the repository owner *key*, which in an agent-operated project is the
    project's repo agent rather than a person. The channel is the delivery path.
 5. Report `Review-ready` once the branch is pushed and the pull request is
-   open. Do not merge, and do not set the pull request to `merged`.
+   open, and name the pull request in the result. Do not merge, and do not set
+   the pull request to `merged`.
 
 ### Maintainer duties
 
@@ -346,7 +382,9 @@ not grant merge, deployment, infrastructure, or customer-data authority.
 
 Use the narrowest accurate completion state:
 
-- `Review-ready`: contributor branch pushed and merge request opened.
+- `Review-ready`: contributor branch pushed and a merge request opened that is
+  ready for review, with its URL in the result. Without that URL the state is
+  not `Review-ready`.
 - `Merged`: maintainer merged the verified change.
 - `Deployed`: maintainer deployed the named commit or build.
 - `Extern verifiziert`: canonical runtime acceptance was completed.

@@ -186,3 +186,12 @@ benennen den Eintrag, den sie richtigstellen. Nichts wird gelöscht.
   über die App selbst (Upstream).
 - PNG ohne Metadaten geht auch mit Pillow: Bild in ein neues `Image` kopieren
   und speichern, dann fehlen ICC-Profil und Text-Chunks.
+
+## 2026-10-24 - Berichte und Wiederholungen
+
+- Eine Zeichenanzahl begrenzt keine gerenderte Textbreite. Breite Zeichen und
+  lange Bezeichner brauchen eigene Exportprüfungen.
+- Ein Beleg braucht einen eigenen Veröffentlichungsschlüssel. Ein vorhandener
+  Fortschrittsbeitrag beweist keinen Datei-Upload.
+- Die Folge Störung, Erholung, Störung enthält drei relevante Zustände.
+  Tagesweite Inhalts-Deduplizierung würde den dritten verschlucken.

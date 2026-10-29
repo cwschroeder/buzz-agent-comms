@@ -19,6 +19,31 @@ commands first, then invoke this setup command again:
 
 Do not add an already registered marketplace again.
 
+## Before you start: explain the two keys
+
+Users get stuck here because two different things in Buzz are called "agent".
+Before step 0, explain the following to the user in their language and in plain
+words, without protocol terms such as NIP-OA, then continue:
+
+- **The user's own Buzz key.** It is the identity they are signed in with in
+  Buzz Desktop or another Buzz client, the one they chat with. The relay admits
+  people by this key (step 2). Setup needs its private part exactly once, in
+  step 4, to sign locally that the coding agent belongs to them. It is neither
+  stored nor sent anywhere.
+- **A second key for Claude Code on this machine.** Setup creates a separate
+  key pair for the Claude Code session they code with in the terminal or IDE,
+  stored in `~/.config/buzz-agent/identity.json`. With it, Claude Code posts its
+  start and result messages into the project channels under its own name,
+  `<Name> (Claude Code)`. The Buzz owner grants project channels to this key,
+  not to the user's own key (step 5).
+- **Not the agents in Buzz Desktop.** The "Agents" area in Buzz Desktop creates
+  and runs Buzz's own agents, each with its own key. Such an agent can even use
+  Claude Code as its runtime, and it still has nothing to do with this setup.
+  Nobody creates an agent there for this plugin, and no key from there is used.
+  Buzz Desktop may later list the Claude Code key as one of the user's agents
+  with the marker "Not managed on this device". That is expected: Desktop knows
+  the key belongs to the user, but does not run it.
+
 ## 0. Install the helper at a stable path
 
 Locate the helper inside this plugin. Try `${CLAUDE_PLUGIN_ROOT}/scripts/project-buzz`
@@ -69,8 +94,9 @@ to the user's own Buzz key, so that key has to be a member of the same relay.
 Ask whether the user already uses this relay with their own Buzz client. If they
 do, this step is done. If they do not, they send their own Buzz public key to the
 relay owner and wait for confirmation. Buzz Desktop shows that key in the profile
-settings as "Public key". The owner adds it on the relay host, where `buzz-admin`
-reaches the relay database:
+settings as "Public key". It is the user's own key from the first point above,
+never the key of an agent from the Desktop "Agents" area. The owner adds it on
+the relay host, where `buzz-admin` reaches the relay database:
 
 ```bash
 buzz-admin add-member --pubkey <human-public-key>
@@ -114,8 +140,10 @@ the conversation:
 ```
 
 The command prompts for the key without echoing it, so it never reaches the
-shell history or this conversation. It accepts both an `nsec1...` key and 64 hex
-characters. Point out that the key is used locally only, to sign the owner
+shell history or this conversation. Tell the user which key that is: their own
+Buzz private key, the one behind their own "Public key" from step 2. It is not
+an agent key; the helper creates the agent key itself in this same step. It
+accepts both an `nsec1...` key and 64 hex characters. Point out that the key is used locally only, to sign the owner
 attestation inside the helper process, and is neither stored nor transmitted nor
 passed to another program. The command prints the agent's public key.
 

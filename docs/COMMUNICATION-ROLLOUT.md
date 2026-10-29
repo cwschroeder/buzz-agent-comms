@@ -90,3 +90,27 @@ Variablen und das verwendete Konto, bevor du die Organisationskonfiguration
 
 Quellen: [Organisations-Plugins](https://code.claude.com/docs/en/plugins/org),
 [Serververwaltete Einstellungen](https://code.claude.com/docs/en/server-managed-settings).
+
+## Reihenfolge für 0.29
+
+Zuerst den Plugin-Helper installieren, danach den Owner-Helper samt
+`project-buzz-routine-lock.py`, anschließend die Fabrik-Integration. Der Owner
+veröffentlicht vollständige Berichte als Datei und verlinkt sie aus der
+Kurzfassung. Die Fabrik liefert dafür optional `buzz_summary` neben `report`.
+Erst nach Prüfung dieser Befehle die Monitor-Anweisungen auf `routine` umstellen.
+
+Routine-Checkpoints speichern nur Zustellung und Fingerprint. Das Betriebssystem
+löst ihren Mutex bei Prozessende. Ein bereits begonnenes Publish ohne bestätigte
+Quittung bleibt dagegen absichtlich blockiert: Nach einem Abbruch kann die
+Nachricht schon auf dem Relay liegen. Automatische Wiederaufnahme ist in diesem
+Fall nicht belegt.
+
+Für die Wiederherstellung beide Monitore anhalten, den betroffenen
+Veröffentlichungsschlüssel und Kanal feststellen und den Relay-Verlauf seit dem
+Startzeitpunkt vollständig prüfen. Autor, Marker, Inhalt und Threadbezug müssen
+übereinstimmen. Ein gefundenes Event mit gültiger ID und richtigem Kanal als
+Quittung sichern. Nur bei belegter Nichtzustellung darf der unvollständige
+Publish-Lock entfernt werden. Bei unvollständigem Verlauf oder unklarer
+Zustellung bleibt der Blocker bestehen. Den gespeicherten Routine-Checkpoint
+nicht löschen; nach der Klärung denselben Aufruf wiederholen. Eine leere oder
+abgebrochene Abfrage beweist keine Nichtzustellung.

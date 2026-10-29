@@ -101,3 +101,18 @@ follows the render contract in [motion.md](motion.md). Open it in a browser to
 preview it, or append `?frame=84` to freeze one frame. Capture, encode and check
 it with the commands in [motion.md](motion.md), then replace the content with
 verified project facts.
+
+## Export acceptance
+
+The bundled sketch uses a narrow, vertically growing layout. Check the actual
+PNG at a 390-pixel-wide phone viewport and at desktop size. Every label and arrow
+must fit, including long identifiers and wide glyphs. Do not approve an export
+only because its SVG parses or its rectangles fit the canvas.
+
+For nonnegative measurements, `typ: "messwerte"` accepts `werte` entries with
+`name` and `wert`, plus mandatory `einheit` and `quelle`. Use JSON null for a
+missing observation, never zero. Bars share a zero baseline. Label synthetic
+fixtures as test data. Supply measurement time and conditions in the caption or
+source. For negative values or more complex series, use an established plotting
+tool and inspect that export. Do not generate a chart to decorate a trivial
+status update.

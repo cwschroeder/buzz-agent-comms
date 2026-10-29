@@ -58,7 +58,7 @@ MARKER_RE = re.compile(
 CLOSING_PHASES = ("result", "blocked", "correction")
 
 MAX_CONTENT = 16000
-HELPER_VERSION = "0.28.1"
+HELPER_VERSION = "0.30.1"
 FORBIDDEN_IN_CONTENT = ("[PILOT-", "[AGENT-")
 LIFECYCLE_PHASES = ("start", "progress", "blocked", "result")
 GERMAN_ASCII_SUBSTITUTION_RE = re.compile(
@@ -834,14 +834,15 @@ KOMM_FIRST_LINE_WARN = 25
 
 
 def komm_prose(content: str, profile: str = "jira") -> str:
-    """Visible prose: no code, no images, no URLs.
+    """Reduce the text to what the length check should count.
 
-    Jira folds <details>, so folded text does not count there. Buzz renders
-    raw HTML as literal text, so on Buzz the folded text stays visible.
+    On Buzz every character renders, so the buzz profile returns the text
+    unchanged: code fences, URLs and link syntax all count there. Jira folds
+    <details> and hides code, so the jira profile drops them before counting.
     """
-    text = content
-    if profile != "buzz":
-        text = re.sub(r"<details>.*?</details>", " ", text, flags=re.S | re.I)
+    if profile == "buzz":
+        return content
+    text = re.sub(r"<details>.*?</details>", " ", content, flags=re.S | re.I)
     text = strip_code_regions(text)
     text = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", text)
     text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
@@ -1179,6 +1180,7 @@ def publish(
     requested_repo: Optional[str],
     supersedes: Optional[str] = None,
     in_channel: bool = False,
+    dedup_phase: Optional[str] = None,
 ) -> Dict[str, Any]:
     agent = agent_name(config)
     validate_update_id(update_id)
@@ -1195,7 +1197,7 @@ def publish(
             content.rstrip(), supersedes[:8], message_url(channel_id, supersedes)
         )
 
-    lock = lock_directory(repo_id, agent, phase, update_id)
+    lock = lock_directory(repo_id, agent, dedup_phase or phase, update_id)
     stored = lock / "output.json"
     try:
         lock.mkdir()
@@ -1204,11 +1206,11 @@ def publish(
             previous = json.loads(stored.read_text(encoding="utf-8"))
             previous["duplicate"] = True
             return previous
-        return {
-            "accepted": True,
-            "duplicate": True,
-            "message": "project update already published",
-        }
+        raise UserError(
+            "Publish is in progress; retry with the same update ID (lock: {0}). "
+            "A stale lock without output.json needs the recovery in "
+            "docs/COMMUNICATION-ROLLOUT.md".format(lock)
+        )
 
     marker = build_marker(phase, agent, update_id)
     args = [
@@ -1240,7 +1242,11 @@ def publish(
     try:
         payload = json.loads(output or "{}")
     except ValueError:
-        payload = {"accepted": True, "raw": output.strip()}
+        payload = {}
+    if (not isinstance(payload, dict) or payload.get("accepted") is not True
+            or not re.fullmatch(r"[0-9a-f]{64}", str(payload.get("event_id", "")))):
+        lock.rmdir()
+        raise UserError("Buzz did not confirm an accepted publish with a valid event ID")
 
     event_id = payload.get("event_id")
     payload.update(
@@ -1286,11 +1292,11 @@ def publish_attachments(
             previous = json.loads(stored.read_text(encoding="utf-8"))
             previous["duplicate"] = True
             return previous
-        return {
-            "accepted": True,
-            "duplicate": True,
-            "message": "project attachment already published",
-        }
+        raise UserError(
+            "Attachment publish is in progress; retry with the same update ID "
+            "(lock: {0}). A stale lock without output.json needs the recovery "
+            "in docs/COMMUNICATION-ROLLOUT.md".format(lock)
+        )
 
     args = [
         "messages",
@@ -1315,7 +1321,11 @@ def publish_attachments(
     try:
         payload = json.loads(output or "{}")
     except ValueError:
-        payload = {"accepted": True, "raw": output.strip()}
+        payload = {}
+    if (not isinstance(payload, dict) or payload.get("accepted") is not True
+            or not re.fullmatch(r"[0-9a-f]{64}", str(payload.get("event_id", "")))):
+        lock.rmdir()
+        raise UserError("Buzz did not confirm an accepted publish with a valid event ID")
 
     event_id = payload.get("event_id")
     payload.update(
@@ -1879,122 +1889,119 @@ def _svg_text(value: Any) -> str:
             .replace(">", "&gt;").replace('"', "&quot;"))
 
 
-def _umbrechen(text: str, breite: int) -> List[str]:
-    zeilen, aktuell = [], ""
-    for wort in str(text).split():
-        if aktuell and len(aktuell) + 1 + len(wort) > breite:
-            zeilen.append(aktuell)
-            aktuell = wort
-        else:
-            aktuell = (aktuell + " " + wort).strip()
-    if aktuell:
-        zeilen.append(aktuell)
-    return zeilen or [""]
-
-
-def _kasten(x: float, y: float, b: float, h: float, text: str, ton: str) -> List[str]:
-    fuellung, rand = SKIZZE_TOENE.get(ton, SKIZZE_TOENE["grau"])
-    zeilen = _umbrechen(text, max(8, int(b / 8.2)))
-    teile = ['<rect x="{0}" y="{1}" width="{2}" height="{3}" rx="8" fill="{4}" '
-             'stroke="{5}"/>'.format(x, y, b, h, fuellung, rand)]
-    start = y + h / 2 - (len(zeilen) - 1) * 9 + 5
-    for n, zeile in enumerate(zeilen):
-        teile.append('<text x="{0}" y="{1}" font-size="14" text-anchor="middle" '
-                     'fill="#0f172a">{2}</text>'.format(x + b / 2, start + n * 18, _svg_text(zeile)))
-    return teile
-
-
-def _pfeil(x1: float, y: float, x2: float) -> str:
-    return ('<line x1="{0}" y1="{1}" x2="{2}" y2="{1}" stroke="#475569" stroke-width="2" '
-            'marker-end="url(#pfeil)"/>'.format(x1, y, x2 - 2))
+def _wrap_svg(text: str, pixels: int, size: int) -> List[str]:
+    """Conservative Helvetica advances, with a full em for wide glyphs."""
+    def width(value: str) -> float:
+        return sum(0.35 if c in " il.,:;!|'" else 1.1 if c in "WM@%" or ord(c) > 255
+                   else 0.8 if c.isupper() else 0.65 for c in value) * size
+    lines, current = [], ""
+    for word in text.split():
+        candidate = (current + " " + word).strip()
+        if current and width(candidate) > pixels:
+            lines.append(current)
+            current = ""
+        for char in word:
+            if width(current + char) > pixels:
+                lines.append(current)
+                current = ""
+            current += char
+        current += " "
+    if current.strip():
+        lines.append(current.strip())
+    return [line.rstrip() for line in lines] or [""]
 
 
 def skizze_svg(spec: Dict[str, Any]) -> str:
+    """A narrow, wrapped export: the canvas grows with content, never clips it."""
+    if not isinstance(spec, dict) or len(json.dumps(spec)) > 16000:
+        raise UserError("skizze: ungültige oder zu große Eingabe")
     typ = spec.get("typ", "ablauf")
-    titel = spec.get("titel", "")
-    breite = 860
-    teile = []  # type: List[str]
-    y = 34
-    if titel:
-        teile.append('<text x="24" y="{0}" font-size="20" font-weight="bold" fill="#0f172a">'
-                     '{1}</text>'.format(y, _svg_text(titel)))
-        y += 26
-    if typ in ("entscheidung", "ablauf"):
-        faelle = spec.get("faelle") or [{"schritte": spec.get("schritte", []),
-                                          "ton": spec.get("ton", "blau")}]
-        if not all(f.get("schritte") for f in faelle):
-            raise UserError("skizze: jeder Fall braucht mindestens einen Schritt")
-        links = 170 if any(f.get("name") for f in faelle) else 24
-        for n, fall in enumerate(faelle):
-            ton = fall.get("ton") or ("gruen", "gelb", "blau", "rot")[n % 4]
-            schritte = fall["schritte"]
-            abstand = 36
-            b = min(240, (breite - links - 24 - abstand * (len(schritte) - 1)) / len(schritte))
-            hoehe = max(54, 18 * max(len(_umbrechen(t, int(b / 8.2))) for t in schritte) + 20)
-            if n:
-                teile.append('<line x1="24" y1="{0}" x2="{1}" y2="{0}" stroke="#cbd5e1"/>'.format(
-                    y - 12, breite - 24))
-            _, rand = SKIZZE_TOENE.get(ton, SKIZZE_TOENE["grau"])
-            if fall.get("name"):
-                teile.append('<text x="24" y="{0}" font-size="16" font-weight="bold" '
-                             'fill="{1}">{2}</text>'.format(y + 22, rand, _svg_text(fall["name"])))
-            for k, zeile in enumerate(_umbrechen(fall.get("untertitel", ""), 18)):
-                teile.append('<text x="24" y="{0}" font-size="13" fill="#334155">{1}</text>'.format(
-                    y + 42 + k * 16, _svg_text(zeile)))
-            x = links
-            for k, schritt in enumerate(schritte):
-                letzter = k == len(schritte) - 1
-                teile += _kasten(x, y, b, hoehe, schritt,
-                                 "grau" if letzter and len(schritte) > 1 and typ == "entscheidung" else ton)
-                if not letzter:
-                    teile.append(_pfeil(x + b, y + hoehe / 2, x + b + abstand))
-                x += b + abstand
-            y += hoehe + 22
-            for schluessel, fett in (("braucht", False), ("stand", True)):
-                if fall.get(schluessel):
-                    text = ("Braucht: " if schluessel == "braucht" else "") + fall[schluessel]
-                    teile.append('<text x="{0}" y="{1}" font-size="13" {2}fill="{3}">{4}</text>'.format(
-                        links, y, 'font-weight="bold" ' if fett else "",
-                        rand if fett else "#334155", _svg_text(text)))
-                    y += 18
-            y += 26 if n < len(faelle) - 1 else 4
+    rows = []
+    if typ in ("ablauf", "entscheidung"):
+        cases = spec.get("faelle") or [{"schritte": spec.get("schritte", []), "ton": spec.get("ton", "blau")}]
+        if not isinstance(cases, list) or len(cases) > 6:
+            raise UserError("skizze: höchstens sechs Fälle")
+        for case in cases:
+            if not isinstance(case, dict) or not isinstance(case.get("schritte"), list) or not 1 <= len(case["schritte"]) <= 8:
+                raise UserError("skizze: jeder Fall braucht einen bis acht Schritte")
+            rows.append((case.get("name", ""), case.get("untertitel", ""), case["schritte"],
+                         case.get("ton", "blau"), case.get("braucht", ""), case.get("stand", "")))
+    elif typ == "messwerte":
+        values = spec.get("werte")
+        if (not isinstance(values, list) or not 1 <= len(values) <= 12
+                or any(not isinstance(item, dict) for item in values)):
+            raise UserError("skizze: ein Diagramm braucht einen bis zwölf Messwerte")
+        if not isinstance(spec.get("einheit"), str) or not spec["einheit"].strip():
+            raise UserError("skizze: Einheit fehlt")
+        if not isinstance(spec.get("quelle"), str) or not spec["quelle"].strip():
+            raise UserError("skizze: Quelle fehlt")
+        import math
+        for item in values:
+            value = item.get("wert")
+            if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0):
+                raise UserError("skizze: Messwert muss endlich und nicht negativ sein oder null für fehlend")
     elif typ == "zeitstrahl":
-        punkte = spec.get("punkte") or []
-        if len(punkte) < 2:
-            raise UserError("skizze: ein Zeitstrahl braucht mindestens zwei Punkte")
-        y += 30
-        rand_x = 130
-        schritt = (breite - 2 * rand_x) / (len(punkte) - 1)
-        teile.append('<line x1="{2}" y1="{0}" x2="{1}" y2="{0}" stroke="#475569" stroke-width="3"/>'.format(
-            y, breite - rand_x, rand_x))
-        tiefe = 0
-        for n, punkt in enumerate(punkte):
-            x = rand_x + n * schritt
-            fuellung, rand = SKIZZE_TOENE.get(punkt.get("ton", "blau"), SKIZZE_TOENE["blau"])
-            teile.append('<circle cx="{0}" cy="{1}" r="9" fill="{2}" stroke="{3}" stroke-width="2"/>'.format(
-                x, y, fuellung, rand))
-            teile.append('<text x="{0}" y="{1}" font-size="14" font-weight="bold" text-anchor="middle" '
-                         'fill="{2}">{3}</text>'.format(x, y - 18, rand, _svg_text(punkt.get("marke", ""))))
-            zeilen = _umbrechen(punkt.get("text", ""), max(10, int(min(schritt, 2 * rand_x) / 8)))
-            for k, zeile in enumerate(zeilen):
-                teile.append('<text x="{0}" y="{1}" font-size="13" text-anchor="middle" '
-                             'fill="#334155">{2}</text>'.format(x, y + 32 + k * 17, _svg_text(zeile)))
-            tiefe = max(tiefe, len(zeilen))
-        y += 32 + tiefe * 17 + 16
+        points = spec.get("punkte", [])
+        if not isinstance(points, list) or not 2 <= len(points) <= 12 or any(not isinstance(x, dict) for x in points):
+            raise UserError("skizze: ein Zeitstrahl braucht zwei bis zwölf Punkte")
+        rows = [(x.get("marke", ""), "", [x.get("text", "")], x.get("ton", "blau"), "", "") for x in points]
     else:
-        raise UserError("skizze: unbekannter typ {0!r} (entscheidung, ablauf, zeitstrahl)".format(typ))
-    if spec.get("fuss"):
-        teile.append('<text x="24" y="{0}" font-size="12" fill="#64748b">{1}</text>'.format(
-            y, _svg_text(spec["fuss"])))
-        y += 20
-    hoehe = int(y + 10)
-    return (
-        '<svg xmlns="http://www.w3.org/2000/svg" width="{0}" height="{1}" viewBox="0 0 {0} {1}" '
-        'font-family="Helvetica, Arial, sans-serif"><rect width="{0}" height="{1}" fill="#ffffff"/>'
-        '<defs><marker id="pfeil" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" '
-        'markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker></defs>'
-        '{2}</svg>\n'.format(breite, hoehe, "".join(teile))
-    )
+        raise UserError("skizze: unbekannter typ " + str(typ))
+    width, y, parts = 440, 28, []
+
+    def wrapped(value: Any, size: int = 16, bold: bool = False) -> None:
+        nonlocal y
+        if not value:
+            return
+        if not isinstance(value, str) or len(value) > 1200:
+            raise UserError("skizze: Beschriftung muss Text bis 1200 Zeichen sein")
+        for line in _wrap_svg(value, 368, size):
+            parts.append('<text x="24" y="{0}" font-size="{1}" font-weight="{2}">{3}</text>'.format(y, size, 700 if bold else 400, _svg_text(line)))
+            y += size + 7
+
+    wrapped(spec.get("titel", ""), 22, True)
+    y += 12
+    for name, subtitle, steps, tone, needs, state in rows:
+        wrapped(name, 19, True)
+        wrapped(subtitle)
+        for index, step in enumerate(steps):
+            if not isinstance(step, str) or not step.strip() or len(step) > 600:
+                raise UserError("skizze: Schritt muss Text bis 600 Zeichen sein")
+            lines = _wrap_svg(step, 368, 17)
+            height = 24 + len(lines) * 23
+            if not isinstance(tone, str):
+                raise UserError("skizze: ton muss Text sein")
+            fill, stroke = SKIZZE_TOENE.get(tone, SKIZZE_TOENE["grau"])
+            parts.append('<rect x="20" y="{0}" width="400" height="{1}" rx="9" fill="{2}" stroke="{3}"/>'.format(y, height, fill, stroke))
+            for i, line in enumerate(lines):
+                parts.append('<text x="36" y="{0}" font-size="17">{1}</text>'.format(y + 27 + i * 23, _svg_text(line)))
+            y += height + 10
+            if index < len(steps) - 1:
+                parts.append('<path d="M220 {0}v14m-5-5 5 5 5-5" fill="none" stroke="#475569" stroke-width="2"/>'.format(y))
+                y += 26
+        y += 16
+        if needs:
+            wrapped("Braucht: " + str(needs))
+        wrapped(state, bold=True)
+        y += 16
+    if typ == "messwerte":
+        maximum = max([item.get("wert") or 0 for item in values]) or 1
+        for item in values:
+            wrapped(item.get("name", "Messung"), 17, True)
+            value = item.get("wert")
+            if value is None:
+                wrapped("nicht gemessen", 16)
+            else:
+                wrapped(str(value) + " " + spec["einheit"], 16)
+                parts.append('<rect x="24" y="{0}" width="{1}" height="14" fill="#2563eb"/>'.format(y, 380 * value / maximum))
+                y += 30
+            y += 16
+        wrapped("Quelle: " + spec["quelle"], 14)
+    wrapped(spec.get("fuss", ""), 14)
+    if y > 6000:
+        raise UserError("skizze: zu hoch, bitte auf die wesentlichen Schritte kürzen")
+    return ('<svg xmlns="http://www.w3.org/2000/svg" width="{0}" height="{1}" viewBox="0 0 {0} {1}" '
+            'font-family="Helvetica, Arial, sans-serif" fill="#0f172a"><rect width="{0}" height="{1}" fill="white"/>{2}</svg>\n').format(width, y + 12, "".join(parts))
 
 
 def command_skizze(arguments: argparse.Namespace) -> int:
@@ -2014,11 +2021,93 @@ def command_skizze(arguments: argparse.Namespace) -> int:
         befehl = ["magick", "-density", "192", svg_pfad, png_pfad]
     else:
         befehl = None
-    if befehl and subprocess.run(befehl, capture_output=True).returncode == 0:
+    try:
+        rendered = befehl and subprocess.run(befehl, capture_output=True, timeout=30).returncode == 0
+    except subprocess.TimeoutExpired:
+        rendered = False
+    if rendered:
         print(png_pfad)
     else:
-        sys.stderr.write("skizze: kein rsvg-convert oder magick gefunden, nur SVG erzeugt.\n")
+        sys.stderr.write("skizze: PNG-Renderer fehlt oder ist fehlgeschlagen, nur SVG erzeugt.\n")
         print(svg_pfad)
+    return 0
+
+
+def render_report(spec: Dict[str, Any]) -> str:
+    """Render supplied facts only; the caller owns evidence and current state."""
+    states = {"analysed": "Prüfung abgeschlossen", "review_ready": "Review-ready",
+              "merged": "Gemergt", "deployed": "Ausgerollt", "verified": "Extern verifiziert",
+              "blocked": "Blockiert"}
+    if not isinstance(spec, dict) or not isinstance(spec.get("state"), str) or spec.get("state") not in states:
+        raise UserError("bericht: ungültiger Arbeitszustand")
+    delivery = spec.get("delivery")
+    if delivery not in ("pending", "live", "not_required"):
+        raise UserError("bericht: delivery muss pending, live oder not_required sein")
+    if delivery == "live" and spec["state"] not in ("deployed", "verified"):
+        raise UserError("bericht: live braucht einen belegten Auslieferungszustand")
+    if spec["state"] in ("deployed", "verified") and delivery != "live":
+        raise UserError("bericht: widersprüchlicher Lieferstand")
+
+    def field(value: Any, name: str, limit: int = 600) -> str:
+        if not isinstance(value, str) or not value.strip() or len(value) > limit:
+            raise UserError("bericht: ungültiges Feld " + name)
+        return value.strip()
+
+    def link(label: Any, url: Any) -> str:
+        label = field(label, "Belegname", 120)
+        url = field(url, "URL", 2048)
+        if not re.match(r"^(https?://[^/\s]+|buzz://message\?)", url) or re.search(r"[\s<>\[\]()]", url):
+            raise UserError("bericht: ungültige Beleg-URL")
+        return "[" + label.replace("[", "\\[").replace("]", "\\]") + "](" + url + ")"
+
+    summary = field(spec.get("summary"), "summary", 1000)
+    lead = ("Nicht live: " if delivery == "pending" else "") + states[spec["state"]] + ". " + summary
+    lines = [lead]
+    if delivery == "not_required":
+        lines.append("Auslieferung: nicht erforderlich.")
+    for key, label in (("owner", "Zuständig"), ("checked_at", "Geprüft"),
+                       ("commit", "Stand"), ("next_action", "Nächster Schritt")):
+        if spec.get(key):
+            lines.append(label + ": " + field(spec[key], key))
+    evidence = spec.get("evidence", [])
+    if not isinstance(evidence, list) or len(evidence) > 8:
+        raise UserError("bericht: höchstens acht Belege")
+    for item in evidence:
+        if not isinstance(item, dict):
+            raise UserError("bericht: ungültiger Beleg")
+        lines.append("- " + link(item.get("label"), item.get("url")))
+    decision = spec.get("decision")
+    if decision is not None:
+        if not isinstance(decision, dict) or decision.get("state") not in ("open", "answered", "withdrawn"):
+            raise UserError("bericht: ungültiger Entscheidungszustand")
+        ident = field(decision.get("id"), "decision.id", 120)
+        label = {"open": "Entscheidung offen", "answered": "Entschieden", "withdrawn": "Entscheidung zurückgezogen"}[decision["state"]]
+        lines.append(label + ": " + link(ident, decision.get("url")))
+        if decision["state"] == "open":
+            lines.append(field(decision.get("question"), "decision.question"))
+            options = decision.get("options", [])
+            if not isinstance(options, list) or len(options) > 5:
+                raise UserError("bericht: höchstens fünf Optionen")
+            lines.extend(str(i + 1) + ". " + field(option, "option", 300) for i, option in enumerate(options))
+    text = "\n\n".join(lines)
+    validate_content(text)
+    report_komm_check(text, "buzz")
+    return text
+
+
+def command_bericht(arguments: argparse.Namespace) -> int:
+    try:
+        if arguments.file == "-":
+            raw = sys.stdin.read(65537)
+        else:
+            with open(arguments.file, encoding="utf-8") as handle:
+                raw = handle.read(65537)
+        if len(raw) > 65536:
+            raise UserError("bericht: Eingabe über 64 KiB")
+        text = render_report(json.loads(raw))
+    except (OSError, ValueError) as error:
+        raise UserError("bericht: " + str(error))
+    print(text)
     return 0
 
 
@@ -2032,6 +2121,89 @@ def command_komm_check(arguments: argparse.Namespace) -> int:
     report_komm_check(content, arguments.profil, arguments.lang or "")
     words = komm_words(komm_prose(content, arguments.profil))
     sys.stderr.write("komm-check ok: {0} Wörter ({1}).\n".format(words, arguments.profil))
+    return 0
+
+
+def acquire_file_mutex(path: Path):
+    handle = open(path, "a+b")
+    handle.seek(0)
+    if path.stat().st_size == 0:
+        handle.write(b"0")
+        handle.flush()
+    handle.seek(0)
+    try:
+        if is_windows():
+            import msvcrt
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        handle.close()
+        raise UserError("Routine publication busy; retry")
+    return handle
+
+
+def command_notice(arguments: argparse.Namespace) -> int:
+    config = load_config()
+    _repo, channel = resolve_project(config, arguments.repo_id)
+    validate_root_event(arguments.root_event_id)
+    content = arguments.content + "\n\n[Zum Ergebnis](" + message_url(channel, arguments.root_event_id) + ")"
+    print(json.dumps(publish(config, "progress", arguments.update_id, content, None, arguments.repo_id, dedup_phase="notice")))
+    return 0
+
+
+def command_routine(arguments: argparse.Namespace) -> int:
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", arguments.day):
+        raise UserError("routine: Datum muss YYYY-MM-DD sein")
+    if not re.fullmatch(r"[a-f0-9]{16,32}", arguments.fingerprint):
+        raise UserError("routine: Fingerprint braucht 16 bis 32 Hex-Zeichen")
+    validate_content(arguments.content)
+    config = load_config()
+    repo, channel = resolve_project(config, arguments.repo_id)
+    agent = agent_name(config)
+    ident = "routine-" + arguments.day + "-" + hashlib.sha256(channel.encode()).hexdigest()[:12]
+    folder = state_root() / "routines"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / (repo + "-" + channel + "-" + agent + "-" + arguments.day + ".json")
+    mutex = path.with_suffix(".lock")
+    handle = acquire_file_mutex(mutex)
+    try:
+        if path.is_file():
+            try:
+                state = json.loads(path.read_text(encoding="utf-8"))
+            except ValueError as error:
+                raise UserError(
+                    "routine: Checkpoint {0} ist kein gültiges JSON: {1}".format(path, error)
+                )
+        else:
+            state = {"sequence": 0}
+        def save() -> None:
+            temporary = path.with_suffix(".tmp")
+            temporary.write_text(json.dumps(state), encoding="utf-8")
+            temporary.replace(path)
+        for _attempt in range(2):
+            if "pending" not in state:
+                if state.get("fingerprint") == arguments.fingerprint:
+                    print(json.dumps(dict(state["receipt"], duplicate=True)))
+                    break
+                state["pending"] = {"fingerprint": arguments.fingerprint,
+                    "content": arguments.content, "sequence": state["sequence"] + 1}
+                save()
+            pending = state["pending"]
+            root = publish(config, "progress", ident,
+                           "Betriebsprüfung vom " + arguments.day + ". Dieser Verlauf sammelt neue Befunde und deren Abschluss.",
+                           None, arguments.repo_id)
+            result = publish(config, "progress", ident + "-" + str(pending["sequence"]),
+                             pending["content"], root["event_id"], arguments.repo_id)
+            state = {"sequence": pending["sequence"], "fingerprint": pending["fingerprint"], "receipt": result}
+            save()
+            if state["fingerprint"] == arguments.fingerprint:
+                print(json.dumps(result))
+                break
+    finally:
+        handle.close()
+
     return 0
 
 
@@ -2080,6 +2252,20 @@ def build_parser() -> argparse.ArgumentParser:
     open_cmd.add_argument("limit", nargs="?", type=int, default=None)
     open_cmd.set_defaults(handler=command_open)
 
+    notice = sub.add_parser("notice", help="Show a result link in the channel without a broadcast")
+    notice.add_argument("update_id")
+    notice.add_argument("root_event_id")
+    notice.add_argument("content")
+    notice.add_argument("repo_id", nargs="?", default=None)
+    notice.set_defaults(handler=command_notice)
+
+    routine = sub.add_parser("routine", help="Group changed findings in a daily thread")
+    routine.add_argument("day")
+    routine.add_argument("fingerprint")
+    routine.add_argument("content")
+    routine.add_argument("repo_id", nargs="?", default=None)
+    routine.set_defaults(handler=command_routine)
+
     correct = sub.add_parser(
         "correct",
         help="Publish a top-level correction that supersedes an earlier update",
@@ -2116,6 +2302,10 @@ def build_parser() -> argparse.ArgumentParser:
     attach.add_argument("--repo-id", default=None)
     attach.set_defaults(handler=command_attach)
 
+    bericht = sub.add_parser("bericht", help="Render a factual result JSON as reader-facing Markdown")
+    bericht.add_argument("file", nargs="?", default="-")
+    bericht.set_defaults(handler=command_bericht)
+
     komm = sub.add_parser(
         "komm-check", help="Check a reader-facing text for length and structure"
     )
@@ -2125,7 +2315,7 @@ def build_parser() -> argparse.ArgumentParser:
     komm.set_defaults(handler=command_komm_check)
 
     skizze = sub.add_parser("skizze", help="Render a sketch (decision, flow, timeline) from JSON")
-    skizze.add_argument("spec", help="JSON file: typ entscheidung|ablauf|zeitstrahl")
+    skizze.add_argument("spec", help="JSON file: typ entscheidung|ablauf|zeitstrahl|messwerte")
     skizze.add_argument("--out", default="", help="Output path without extension")
     skizze.set_defaults(handler=command_skizze)
 

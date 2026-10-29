@@ -23,7 +23,9 @@ lokalen Helper für signierte, deduplizierte Buzz-Nachrichten.
   Merge Request.
 - Reserviert Merge, Deployment und die Verwaltung der zugehörigen Infrastruktur
   für den ausdrücklich benannten Maintainer. Beitragende enden bei
-  `Review-ready`.
+  `Review-ready`, und das gilt nur mit der Adresse eines bereiten Merge
+  Requests. Liegt das Projekt auf einer Firmen-Forge, entsteht er dort per
+  `glab mr create`, nicht per `buzz pr open`.
 - Verpflichtet Claude bei jeder UI- und UX-Arbeit, den installierten
   `impeccable`-Skill vollständig zu laden und dessen Workflow anzuwenden. Fehlt
   der Skill, darf der Agent die Oberfläche nicht verändern.
@@ -303,6 +305,25 @@ Vorgehen, der `engineering-contract` die Regeln, `buzz-team-communication` die
 Meldung im Kanal.
 
 ## Identitäts- und Berechtigungsmodell
+
+Die Einrichtung arbeitet mit zwei Schlüsseln:
+
+- **Der eigene Buzz-Key.** Mit ihm ist man in Buzz Desktop angemeldet und
+  schreibt selbst. Der Relay lässt Personen über diesen Key herein. Die
+  Einrichtung braucht seinen privaten Teil genau einmal, lokal, um zu
+  bestätigen, dass der Coding-Agent einem gehört.
+- **Ein zweiter Key für Claude Code auf diesem Rechner.** Den erzeugt die
+  Einrichtung selbst. Damit meldet die Claude-Code-Sitzung, mit der man im
+  Terminal oder in der IDE programmiert, Start und Ergebnis unter eigenem Namen
+  in den Projektchannel, etwa „Alex (Claude Code)“.
+
+Die Agenten im Bereich „Agents“ von Buzz Desktop sind etwas anderes. Das sind
+Agenten, die Buzz selbst startet, jeder mit eigenem Key, auf Wunsch sogar mit
+Claude Code als Laufzeit. Mit diesem Plugin haben sie nichts zu tun: Für die
+Einrichtung wird dort kein Agent angelegt und kein Key von dort verwendet.
+Buzz Desktop kann den Claude-Code-Key später mit dem Hinweis „Not managed
+on this device“ unter den eigenen Agenten zeigen. Das ist richtig so: Desktop
+weiß, dass der Key einem gehört, startet ihn aber nicht.
 
 Jeder Entwickler erzeugt lokal ein eigenes Agent-Schlüsselpaar. Der Agent-Key
 wird per NIP-OA an den eigenen Buzz-Human-Key attestiert. Der Human-Key wird nur
@@ -622,3 +643,24 @@ Der mitgelieferte Skill `ponytail-review` wurde aus
 `0a4dd63ad4541f4f655c4108a295916f3c1d8fda`, für diesen Entwicklungsvertrag
 angepasst. Er steht unter MIT. Die unveränderte Lizenz liegt unter
 `plugins/buzz-comms/skills/ponytail-review/LICENSE` und gehört zu jeder Kopie.
+
+### Kompakte Berichte und ruhige Betriebsprüfungen
+
+Ab 0.29 zählt `komm-check` auch sichtbaren Code. `bericht report.json` erzeugt
+Status, Zuständigkeit, Belege und eine offene oder zurückgezogene Entscheidung
+aus gelieferten Fakten. Der Helper prüft das Format; er bestätigt keinen Rollout.
+
+```json
+{"summary":"Die Prüfung ist abgeschlossen.","state":"analysed","delivery":"not_required","owner":"Review-Team","evidence":[{"label":"Prüfbericht","url":"https://example.org/report"}],"next_action":"Befunde prüfen."}
+```
+
+`routine YYYY-MM-DD FINGERPRINT TEXT [repo-id]` sammelt geänderte Befunde in
+einem Tagesverlauf. Unveränderte Prüfungen brauchen keinen Start und kein
+Ergebnis pro Takt. Eine neue Reparatur behält ihren eigenen Arbeitsverlauf.
+`notice ID EVENT TEXT [repo-id]` macht ein Ergebnis als Link im Kanal sichtbar,
+ohne alle Mitglieder per Broadcast zu benachrichtigen.
+
+`skizze` erzeugt schmale Ablaufbilder, Entscheidungen, Zeitstrahlen und
+Messwertdiagramme (`typ: messwerte`, `werte: [{name, wert}]`, `einheit`, `quelle`).
+Fehlende Werte sind `null`. Prüfe das erzeugte Bild vor dem Anhängen auch in
+Telefonbreite. Lange Berichte bleiben als verlinkte Datei erhalten.

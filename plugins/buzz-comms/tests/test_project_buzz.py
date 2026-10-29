@@ -1066,6 +1066,42 @@ class PolicyContract(unittest.TestCase):
         self.assertIn("| `ponytail-review` |", readme)
         self.assertIn("/buzz-comms:ponytail-review", readme)
 
+    def test_review_ready_requires_a_request_url_on_the_authoritative_forge(self):
+        """A pushed branch without a merge request is not review-ready.
+
+        Seen on 28.10.2026: a contributor reported `Review-ready` for a branch
+        pushed to the office GitLab without a merge request. The factory's
+        scanner reads merge requests, not branches, so nobody saw the work.
+        """
+        skill_root = SCRIPTS.parent / "skills"
+        contract = " ".join(
+            (skill_root / "engineering-contract" / "SKILL.md")
+            .read_text(encoding="utf-8")
+            .split()
+        )
+        communication = " ".join(
+            (skill_root / "buzz-team-communication" / "SKILL.md")
+            .read_text(encoding="utf-8")
+            .split()
+        )
+
+        for phrase in (
+            "`Review-ready` requires the URL of that merge or pull request",
+            "A pushed branch without a request is not review-ready",
+            "report `blocked` with that reason instead of `Review-ready`",
+            "### Where the merge request is opened",
+            "glab mr create",
+            "--target-branch master",
+            "Do not pass `--draft`",
+            "`buzz pr open` is not a substitute on such a project",
+            "Without that URL the state is not `Review-ready`",
+        ):
+            self.assertIn(phrase, contract)
+        # The example must never open a draft, or the request gets no review.
+        example = contract.split("glab mr create", 1)[1].split("```", 1)[0]
+        self.assertNotIn("--draft", example)
+        self.assertIn("with the URL of the merge request", communication)
+
     def test_buzz_git_remote_contribution_rules_are_binding(self):
         """The rules that keep a forge-less contributor from silent failure.
 
@@ -1262,7 +1298,37 @@ class PolicyContract(unittest.TestCase):
             "relay membership must be settled before provisioning touches the relay",
         )
 
+        # Seen on 29.10.2026: a colleague could not tell their own Buzz key from
+        # the Claude Code agent key, and took the agents Buzz Desktop offers in
+        # its "Agents" area for the agent this plugin sets up. The explanation
+        # has to come before the first step, not after the first failure.
+        self.assertLess(
+            setup.index("## Before you start: explain the two keys"),
+            setup.index("## 0. Install the helper"),
+        )
+        flowing_setup = " ".join(setup.split())
+        for phrase in (
+            "**The user's own Buzz key.**",
+            "**A second key for Claude Code on this machine.**",
+            "**Not the agents in Buzz Desktop.**",
+            "it still has nothing to do with this setup",
+            '"Not managed on this device"',
+            'never the key of an agent from the Desktop "Agents" area',
+            "It is not an agent key",
+        ):
+            self.assertIn(phrase, flowing_setup)
+
         readme = (repository / "README.md").read_text(encoding="utf-8")
+        identity = readme.split("## Identitäts- und Berechtigungsmodell", 1)[1].split(
+            "## Einrichtung", 1
+        )[0]
+        for phrase in (
+            "**Der eigene Buzz-Key.**",
+            "**Ein zweiter Key für Claude Code auf diesem Rechner.**",
+            "Die Agenten im Bereich „Agents“ von Buzz Desktop sind etwas anderes.",
+            "Mit diesem Plugin haben sie nichts zu tun",
+        ):
+            self.assertIn(phrase, identity)
         self.assertIn("Runbook für den Buzz-Owner", readme)
         for command in (
             "buzz-admin add-member",

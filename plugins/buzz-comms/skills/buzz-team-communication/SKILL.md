@@ -72,7 +72,8 @@ that source drift could not be checked.
    commit/build that must be visible there. Inspect the active feature worktree;
    do not assume the default checkout is the delivery source. If no canonical
    runtime exists, record that explicitly before work begins.
-5. Before the first project mutation or long-running operation, publish one root:
+5. Before the first project mutation or long-running operation, publish one root.
+   Recurring read-only checks use the daily routine workflow below instead:
 
    ```bash
    project-buzz start <update-id> "<concise intent>" [repo-id]
@@ -110,13 +111,11 @@ that source drift could not be checked.
    cannot continue safely, use `blocked` instead and name the concrete
    dependency.
 
-   A result stays inside the thread. Add `--im-kanal` to `result` or `blocked`
-   when people in the channel should read it without opening the thread: a
-   merge request that now needs a reviewer, a finding, a delivered change, or a
-   blocker someone has to resolve. Buzz then shows the reply in the timeline
-   and notifies every channel member at high priority, even in a muted
-   channel. Routine steps such as a push, a rebase or a retry stay in the
-   thread without the flag.
+   A result stays inside the thread. Use `notice` for a top-level link when
+   colleagues should see it in the channel. Reserve `--im-kanal` for urgent,
+   actionable blockers: it shows the reply in the timeline and notifies every
+   member at high priority, even in a muted channel. Ordinary review requests,
+   delivered changes and findings do not automatically justify that broadcast.
 
    ```bash
    project-buzz result <update-id> <root-event-id> "<result>" --im-kanal [repo-id]
@@ -158,8 +157,9 @@ returns every update thread that opened with a `start` yet reached neither
 ## Delivery proof for user-visible changes
 
 - Only an explicitly designated maintainer may merge, deploy, or change shared
-  infrastructure. A contributor publishes a review-ready result with the merge
-  request and leads with `Nicht live` while maintainer action remains open.
+  infrastructure. A contributor publishes a review-ready result with the URL of
+  the merge request and leads with `Nicht live` while maintainer action remains
+  open. A pushed branch without a request is not review-ready.
 - Do not publish `result` or make an equivalent completion claim until the
   concrete commit/build runs on the canonical runtime and an external browser
   check has verified the requested behavior. A local dev server, green build,
@@ -370,3 +370,39 @@ which step is open instead of working around the reporting requirement:
 - no config or identity: run `/buzz-comms:buzz-setup`
 - identity exists but a channel is not visible: the Buzz owner still has to grant
   access for that repository to this agent's public key
+
+## Recurring checks and evidence (0.29)
+
+A scheduled read-only check is not a new project task on every tick. Read context
+and open work, then compare the canonical findings with the previous checkpoint.
+Stay silent when nothing changed. For a new finding, recovery or changed decision,
+use `project-buzz routine YYYY-MM-DD FINGERPRINT "<finding>" [repo-id]`.
+Use the same configured identity for cooperating monitors. Hash the semantic
+finding and decision state (16 to 32 hex characters), excluding poll timestamps
+and unchanged counters. The helper suppresses consecutive duplicates, preserves
+A -> recovered -> A, and retries an unfinished publication before a newer one.
+Daily threads carry progress markers, so they do not masquerade as unfinished
+implementation work. An actual repair still needs its own start and result.
+
+For ordinary channel visibility, use
+`project-buzz notice <update-id> <result-event-id> "<short effect>" [repo-id]`.
+This creates a top-level link, without the broadcast flag. Members' normal
+notification preferences still apply. Reserve `--im-kanal` for an urgent,
+actionable blocker that needs every member's attention.
+
+`project-buzz bericht report.json` renders supplied facts as Markdown. Supply
+`summary`, `state` (analysed, review_ready, merged, deployed, verified, blocked),
+`delivery` (pending, live, not_required), and `evidence` (label/url pairs).
+Optional fields are owner, checked_at, commit, next_action and decision.
+A decision carries id, state (open, answered, withdrawn), current URL, question
+and options. Show the question once. Re-read the canonical decision before
+acting; a rendered card is a dated projection, never an approval authority.
+A withdrawn decision has no actionable options. Keep authoritative task and
+decision state in the factory ledger, not in plugin storage.
+
+The length check counts visible code as well as prose. Code fences, HTML and
+attachments are not ways to hide an oversized channel post. Aim for 150 words;
+keep the full report in a reviewed top-level attachment with a link in the
+result. Missing summaries must be labelled as missing. A blanket `KOMM_LANG`
+exception for generated reports is forbidden. Intentional exceptions still
+require a concrete reader need. Check privacy and credentials before upload.
