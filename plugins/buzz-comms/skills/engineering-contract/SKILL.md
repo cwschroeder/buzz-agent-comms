@@ -140,6 +140,8 @@ it, and an agent-operated project does not see it at all, because its scanner
 reads merge requests, not branches. If the request cannot be opened (no forge
 access, no authenticated `glab`, forge unreachable), report `blocked` with that
 reason instead of `Review-ready`.
+Forge access is set up once per machine with `/buzz-comms:buzz-setup`, step 8
+"Merge requests on a company GitLab"; point the user there.
 
 Only the maintainer may merge into `master` or the repository's explicitly
 configured protected integration branch. Contributors must not enable

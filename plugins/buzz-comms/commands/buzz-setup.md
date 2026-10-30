@@ -211,7 +211,53 @@ question.
 Contribution rules for these repositories live in the `engineering-contract`
 skill, section "Contributing over the Buzz git remote".
 
-## 8. Verify
+## 8. Merge requests on a company GitLab
+
+Skip this step when none of the user's projects lives on a GitLab instance.
+Contributors stop at `Review-ready`, and that needs a merge request
+(`engineering-contract`, "Where the merge request is opened"). Without forge
+access the agent can push a branch but cannot open the request, and the
+maintainer's scanner, which reads merge requests and not branches, never sees
+the work.
+
+1. Check that `glab` is installed with `glab --version`. If it is missing,
+   install it with the platform's package manager as described at
+   <https://gitlab.com/gitlab-org/cli#installation>, for example
+   `brew install glab` on macOS.
+2. The user creates a personal access token on the GitLab instance, under their
+   own account, in the user settings under "Access tokens". Scope `api`, with an
+   expiry date. `api` is the scope `glab mr create` needs; nothing more. If the
+   instance does not let users create personal access tokens, the user asks its
+   administrator for one.
+3. The user signs `glab` in themselves, in their own terminal, so the token
+   never passes through this conversation:
+
+   ```bash
+   glab auth login --hostname <gitlab-host>
+   ```
+
+   They choose the token login, paste the token at the hidden prompt, and pick
+   the protocol the project's remote already uses. The host is the one in the
+   remote (`git remote -v`), without `git@`, user name or path.
+4. Verify without printing the token:
+
+   ```bash
+   glab auth status --hostname <gitlab-host>
+   glab api user --hostname <gitlab-host>
+   ```
+
+   The second command returns the account as JSON. Its `username` must be the
+   user's own GitLab account, not a shared or service account.
+
+If the remote uses an SSH alias from `~/.ssh/config` instead of the real host
+name, `glab` cannot tell which instance it belongs to. Then name the project
+explicitly when opening a request:
+`glab mr create -R https://<gitlab-host>/<group>/<repo> ...`.
+
+If the host does not resolve or the API does not answer, the instance is
+usually reachable only through the company VPN. Connect it and repeat the check.
+
+## 9. Verify
 
 ```bash
 ~/.config/buzz-agent/bin/project-buzz doctor

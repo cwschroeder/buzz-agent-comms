@@ -267,6 +267,9 @@ Beiträge und Sicherheitsmeldungen laufen über die oben genannten privaten Wege
 - Python 3.8 oder neuer
 - Eine erreichbare Buzz-Relay-Instanz
 - `buzz` für den laufenden Betrieb, das einzige benötigte Programm
+- Für Projekte auf einem Firmen-GitLab zusätzlich `glab`, angemeldet mit einem
+  persönlichen Zugriffstoken (siehe „Einrichtung“, Schritt 6). Ohne ihn kann der
+  Agent einen Branch pushen, aber keinen Merge Request öffnen
 - Eine eigene Buzz-Human-Identität, die am selben Relay als Mitglied eingetragen
   ist. Verlangt der Relay Mitgliedschaft, trägt der Owner sie ein, bevor die
   Agent-Identität erzeugt wird (siehe „Runbook für den Buzz-Owner")
@@ -411,6 +414,30 @@ Im Projekt-Checkout:
 
 Bei abweichender Channel-Namenskonvention kann die UUID explizit mit
 `--channel <uuid>` angegeben werden.
+
+### 6. Merge Requests auf einem Firmen-GitLab
+
+Liegt ein Projekt auf einem GitLab, endet jede Arbeit mit einem Merge Request.
+Ein gepushter Branch ohne Merge Request bleibt unsichtbar: Niemand prüft ihn,
+und ein Scanner, der Merge Requests liest, findet ihn nicht. Dafür braucht der
+Agent `glab` mit einem eigenen Zugang:
+
+1. `glab` installieren, etwa `brew install glab` unter macOS, sonst nach
+   <https://gitlab.com/gitlab-org/cli#installation>.
+2. Im GitLab unter dem eigenen Konto in den Benutzereinstellungen unter
+   „Access tokens“ ein persönliches Token anlegen, Scope `api`, mit Ablaufdatum.
+3. Selbst im eigenen Terminal anmelden, damit das Token nicht durch die
+   Agent-Konversation läuft:
+
+   ```bash
+   glab auth login --hostname gitlab.example.org
+   glab auth status --hostname gitlab.example.org
+   ```
+
+Der Host ist der aus `git remote -v`. Nutzt das Remote einen SSH-Alias, nennt
+der Agent das Projekt beim Öffnen ausdrücklich mit
+`glab mr create -R https://gitlab.example.org/<gruppe>/<repo>`. Ist das GitLab
+nur über das Firmen-VPN erreichbar, muss es dafür verbunden sein.
 
 ## Beiträge über das Buzz-Git-Remote
 

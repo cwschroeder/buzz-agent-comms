@@ -1102,6 +1102,54 @@ class PolicyContract(unittest.TestCase):
         self.assertNotIn("--draft", example)
         self.assertIn("with the URL of the merge request", communication)
 
+    def test_setup_gives_the_agent_its_own_forge_access(self):
+        """Setup has to leave the agent able to open the merge request.
+
+        Seen on 30.10.2026: a contributor's agent finished two branches and
+        pushed them, but could not open the merge requests, because the
+        machine had neither `glab` nor a GitLab token. The token belongs to
+        the user and is entered by the user, never through the conversation.
+        """
+        repository = SCRIPTS.parents[2]
+        setup = (SCRIPTS.parent / "commands" / "buzz-setup.md").read_text(
+            encoding="utf-8"
+        )
+        forge_step = setup.split("## 8. Merge requests on a company GitLab", 1)[1].split(
+            "## 9. Verify", 1
+        )[0]
+        flowing = " ".join(forge_step.split())
+        for phrase in (
+            "glab --version",
+            "Scope `api`, with an expiry date",
+            "glab auth login --hostname <gitlab-host>",
+            "the token never passes through this conversation",
+            "glab auth status --hostname <gitlab-host>",
+            "glab api user --hostname <gitlab-host>",
+            "not a shared or service account",
+            "glab mr create -R https://<gitlab-host>/<group>/<repo>",
+        ):
+            self.assertIn(phrase, flowing)
+        # The agent must not run the login itself or ask for the token in chat.
+        self.assertNotIn("--token", forge_step)
+        self.assertNotIn("--stdin", forge_step)
+
+        contract = " ".join(
+            (SCRIPTS.parent / "skills" / "engineering-contract" / "SKILL.md")
+            .read_text(encoding="utf-8")
+            .split()
+        )
+        self.assertIn(
+            'with `/buzz-comms:buzz-setup`, step 8 "Merge requests on a company GitLab"',
+            contract,
+        )
+
+        readme = (repository / "README.md").read_text(encoding="utf-8")
+        section = readme.split("### 6. Merge Requests auf einem Firmen-GitLab", 1)[1].split(
+            "## Beiträge über das Buzz-Git-Remote", 1
+        )[0]
+        for phrase in ("Scope `api`", "glab auth login --hostname gitlab.example.org"):
+            self.assertIn(phrase, section)
+
     def test_buzz_git_remote_contribution_rules_are_binding(self):
         """The rules that keep a forge-less contributor from silent failure.
 

@@ -58,7 +58,7 @@ MARKER_RE = re.compile(
 CLOSING_PHASES = ("result", "blocked", "correction")
 
 MAX_CONTENT = 16000
-HELPER_VERSION = "0.30.1"
+HELPER_VERSION = "0.31.0"
 FORBIDDEN_IN_CONTENT = ("[PILOT-", "[AGENT-")
 LIFECYCLE_PHASES = ("start", "progress", "blocked", "result")
 GERMAN_ASCII_SUBSTITUTION_RE = re.compile(
