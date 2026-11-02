@@ -91,7 +91,12 @@ plugins/buzz-comms/
 │   ├── reflect.md                       # /buzz-comms:reflect: session learnings
 │   └── handoff.md                       # /buzz-comms:handoff: handover note
 ├── scripts/project-buzz                 # the deterministic helper (Python 3.8+)
-└── tests/test_project_buzz.py           # unittest suite, runs without a relay
+├── tests/test_project_buzz.py           # unittest suite, runs without a relay
+└── tests/test_buzz_app_lifecycle.py     # marker parity with the Buzz 1.0 plugin (node)
+buzz-app-plugins/lifecycle/              # Buzz 1.0 desktop plugin, not part of the
+├── manifest.json                        #   Claude Code plugin package; loaded in
+├── plugin.js                            #   Buzz via Settings → Plugins → Load from
+└── README.md                            #   folder, shown there as its guide
 README.md                                # operator and colleague documentation (German)
 ```
 

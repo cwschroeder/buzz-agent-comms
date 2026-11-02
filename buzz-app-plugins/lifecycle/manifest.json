@@ -1,0 +1,10 @@
+{
+  "id": "buzz-comms.lifecycle",
+  "name": "Lifecycle-Status",
+  "apiVersion": 1,
+  "description": "Zeigt an Agent-Posts aus project-buzz, ob sie Start, Zwischenstand, Ergebnis, Blocker oder Korrektur sind, und auf Wunsch den Stand ihres Threads.",
+  "discovery": {
+    "category": "agent-tools",
+    "tags": ["buzz-comms", "Lifecycle"]
+  }
+}
