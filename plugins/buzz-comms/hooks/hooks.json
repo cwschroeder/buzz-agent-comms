@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/project-buzz\" install --sync 2>/dev/null || python \"${CLAUDE_PLUGIN_ROOT}/scripts/project-buzz\" install --sync 2>/dev/null || true",
+            "shell": "bash",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

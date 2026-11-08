@@ -61,13 +61,17 @@ that source drift could not be checked.
 2. Run `project-buzz resolve` from the project workspace. Fail closed if the
    project is not registered; never guess a neighbouring channel. If it is not
    registered and the work is in scope, run `project-buzz register <repo-id>`.
-3. Run `project-buzz context <repo-id> 20` before planning, mutating, building,
-   deploying, or diagnosing. Actively apply the recent messages: identify
+3. Run `project-buzz context <repo-id>` before planning, mutating, building,
+   deploying, or diagnosing. It returns the 20 newest posts that matter and
+   names on stderr what it hid: lifecycle threads that reached their result
+   within five minutes, posts that open with another tool's machine marker,
+   and routine threads. Add `--all` when you need those too. Actively apply
+   the recent messages: identify
    parallel work, active worktrees/feature branches, current runtime state,
    corrections, review gates, and unresolved blockers. Someone else's agent
    may already own part of this work. `project-buzz open <repo-id>` lists the
-   threads that started but never reached a closing result, so open work is
-   answerable without scrolling.
+   threads of the last week that started but never reached a closing result,
+   so open work is answerable without scrolling.
 4. For a user-visible change, determine the canonical runtime URL and the exact
    commit/build that must be visible there. Inspect the active feature worktree;
    do not assume the default checkout is the delivery source. If no canonical
@@ -147,7 +151,8 @@ original update; do not chain further results after it.
 Open work is read with the deterministic `open` view instead of from memory:
 
 ```bash
-project-buzz open [repo-id] [limit]     # default limit 100, max 200
+project-buzz open [repo-id] [--hours N]   # default the last 168 hours
+project-buzz open [repo-id] <limit>       # only the newest 1 to 200 messages
 ```
 
 It groups messages into threads by their root event (the reply `e`-tag) and

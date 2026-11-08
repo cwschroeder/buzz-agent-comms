@@ -207,10 +207,12 @@ den vorhandenen Marketplace und das installierte Plugin getrennt:
 - `plugin update` installiert die aktuelle Plugin-Version aus dem aktualisierten
   Marketplace.
 - `/reload-plugins` lädt diese Version in den laufenden Chat.
-- `buzz-setup` muss nach jedem Plugin-Update erneut laufen. Es kopiert den
-  aktuellen Helper aus dem Plugin-Cache nach
-  `~/.config/buzz-agent/bin/project-buzz`. Vorhandene Verzeichnisse unter
-  `~/.buzz/` oder `~/.config/buzz-agent/` ersetzen diesen Schritt nicht.
+- Seit 0.32.0 erneuert das Plugin den Helper selbst: Beim Start jeder
+  Claude-Code-Sitzung kopiert es ihn nach `~/.config/buzz-agent/bin/project-buzz`,
+  wenn die Version im Plugin neuer ist. Eine neuere Kopie bleibt unberührt.
+  `buzz-setup` macht dasselbe sofort, also schon im laufenden Chat.
+  Vorhandene Verzeichnisse unter `~/.buzz/` oder `~/.config/buzz-agent/`
+  ersetzen diese Kopie nicht.
 - `buzz-status` prüft abschließend Plugin, Helper und Buzz-Zugang.
 
 Falls die Slash-Befehle in einer älteren Claude-Code-Version nicht verfügbar
@@ -532,7 +534,10 @@ Der Skill führt den Agenten durch diese Reihenfolge:
 
 1. Plugin-/Helper-Drift prüfen.
 2. Projekt fail-closed auflösen.
-3. Die letzten 20 Channel-Nachrichten lesen und anwenden.
+3. Die 20 neuesten relevanten Channel-Beiträge lesen und anwenden. `context`
+   blendet Benachrichtigungs-Threads aus, die binnen fünf Minuten abgeschlossen
+   waren, außerdem Maschinenbeiträge anderer Werkzeuge und Routine-Threads;
+   `--all` zeigt alles.
 4. Vor Mutation oder längerer Ausführung einen Lifecycle-Start posten.
 5. Nur relevante Meilensteine in demselben Thread ergänzen.
 6. Änderungen proportional verifizieren.
@@ -555,12 +560,12 @@ Die Verteilung an lokale Agents und Teaminstallationen beschreibt
 ## Helper-Kommandos
 
 ```text
-project-buzz install [--check]
+project-buzz install [--check | --sync]
 project-buzz provision --display-name <name> [--about <text>]
 project-buzz register <repo-id> [--path <path>] [--channel <uuid>]
 project-buzz resolve [repo-id]
-project-buzz context [repo-id] [limit]
-project-buzz open [repo-id] [limit]
+project-buzz context [repo-id] [limit] [--all]
+project-buzz open [repo-id] [limit | --hours <n>]
 project-buzz start <update-id> <text> [repo-id]
 project-buzz progress <update-id> <root-event-id> <text> [repo-id]
 project-buzz blocked <update-id> <root-event-id> <text> [--im-kanal] [repo-id]

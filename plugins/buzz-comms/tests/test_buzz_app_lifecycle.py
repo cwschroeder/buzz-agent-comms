@@ -132,7 +132,9 @@ class BuzzAppLifecyclePlugin(HelperTestCase):
         )
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
-            self.assertEqual(self.run_cli(["open"]), 0)
+            # An explicit limit reads the fixture as it is; the default week
+            # window would drop these 1970 timestamps.
+            self.assertEqual(self.run_cli(["open", "200"]), 0)
         helper_open = {thread["root"] for thread in json.loads(stdout.getvalue())["open"]}
 
         threads = {}

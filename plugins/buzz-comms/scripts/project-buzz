@@ -34,6 +34,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -56,9 +57,23 @@ MARKER_RE = re.compile(
     r"([a-z0-9][a-z0-9._-]{0,31}):([A-Za-z0-9][A-Za-z0-9._-]{0,63})\]"
 )
 CLOSING_PHASES = ("result", "blocked", "correction")
+# A post that opens with another tool's protocol marker, such as
+# "[TOOL-ORDER:...]": machine traffic, not a person and not a lifecycle event.
+# The hyphen keeps a human "[WIP: ...]" out of it.
+FOREIGN_MARKER_RE = re.compile(r"\[(?!AGENT-)[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+:[^\]\n]*\]")
+
+# Reading the channel. `messages get` returns at most one page per call, so
+# busy channels are paged with --before, and the page count bounds every read.
+MESSAGES_PAGE = 200
+MESSAGES_MAX_PAGES = 10
+# A lifecycle thread that reached its result this soon after the start is a
+# notification, not parallel work, so `context` hides it by default.
+QUICK_THREAD_SECONDS = 300
+CONTEXT_DEFAULT_LIMIT = 20
+OPEN_DEFAULT_HOURS = 168
 
 MAX_CONTENT = 16000
-HELPER_VERSION = "0.31.0"
+HELPER_VERSION = "0.32.0"
 FORBIDDEN_IN_CONTENT = ("[PILOT-", "[AGENT-")
 LIFECYCLE_PHASES = ("start", "progress", "blocked", "result")
 GERMAN_ASCII_SUBSTITUTION_RE = re.compile(
@@ -1347,11 +1362,85 @@ def publish_attachments(
 # --------------------------------------------------------------------------
 
 
+HELPER_VERSION_LINE_RE = re.compile(
+    r'^HELPER_VERSION = "([0-9]+(?:\.[0-9]+)*)"$', re.MULTILINE
+)
+
+
+def helper_version_of(text: str) -> Optional[Tuple[int, ...]]:
+    """Read HELPER_VERSION from a helper's source text, or None."""
+    match = HELPER_VERSION_LINE_RE.search(text)
+    if match is None:
+        return None
+    return tuple(int(part) for part in match.group(1).split("."))
+
+
+def write_windows_launcher(target_dir: Path) -> None:
+    # Windows does not honour the shebang, so ship a launcher that makes the
+    # documented call work from cmd, PowerShell and Git Bash alike.
+    launcher = target_dir / "project-buzz.cmd"
+    launcher.write_text(
+        '@echo off\r\npython "%~dp0project-buzz" %*\r\n', encoding="utf-8"
+    )
+
+
+def sync_installed_helper(source: Path, target_dir: Path, target: Path) -> int:
+    """Refresh the stable copy after a plugin update; never fail the session.
+
+    The plugin's SessionStart hook runs this. Claude Code replaces the plugin
+    cache on update, but the copy under ``bin/`` stayed at the version of the
+    last setup run, so colleagues kept publishing with an outdated helper.
+    Only a newer plugin replaces the copy: a hook from an older plugin cache or
+    a maintainer's development copy is never downgraded. The new file is
+    written next to the target and renamed, so a session starting at the same
+    moment never runs a half-written helper. Every failure is reported on
+    stderr and the exit status stays 0, because a broken copy step must not
+    block anyone's session.
+    """
+    temporary = target_dir / ".project-buzz.{0}.tmp".format(os.getpid())
+    try:
+        ours = helper_version_of(source.read_text(encoding="utf-8"))
+        if ours is None:
+            return 0
+        previous = None
+        if target.is_file():
+            if target.resolve() == source:
+                return 0
+            previous = helper_version_of(
+                target.read_text(encoding="utf-8", errors="replace")
+            )
+            if previous is not None and previous >= ours:
+                return 0
+        target_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(str(source), str(temporary))
+        temporary.chmod(0o755)
+        os.replace(str(temporary), str(target))
+        if is_windows():
+            write_windows_launcher(target_dir)
+        print(
+            "buzz-comms: Buzz helper at {0} updated from {1} to {2}.".format(
+                target,
+                ".".join(str(part) for part in previous) if previous else "none",
+                HELPER_VERSION,
+            )
+        )
+    except OSError as error:
+        sys.stderr.write("buzz-comms: helper sync skipped: {0}\n".format(error))
+        try:
+            temporary.unlink()
+        except OSError:
+            pass
+    return 0
+
+
 def command_install(arguments: argparse.Namespace) -> int:
     """Copy this helper to a stable path so callers never guess a plugin dir."""
     source = Path(__file__).resolve()
     target_dir = agent_home() / "bin"
     target = target_dir / "project-buzz"
+
+    if arguments.sync:
+        return sync_installed_helper(source, target_dir, target)
 
     if arguments.check:
         up_to_date = target.is_file() and target.read_bytes() == source.read_bytes()
@@ -1375,12 +1464,7 @@ def command_install(arguments: argparse.Namespace) -> int:
     target.chmod(0o755)
 
     if is_windows():
-        # Windows does not honour the shebang, so ship a launcher that makes the
-        # documented call work from cmd, PowerShell and Git Bash alike.
-        launcher = target_dir / "project-buzz.cmd"
-        launcher.write_text(
-            '@echo off\r\npython "%~dp0project-buzz" %*\r\n', encoding="utf-8"
-        )
+        write_windows_launcher(target_dir)
 
     on_path = shutil.which("project-buzz") == str(target)
     print(
@@ -1568,6 +1652,13 @@ def command_resolve(arguments: argparse.Namespace) -> int:
 
 
 def command_context(arguments: argparse.Namespace) -> int:
+    """Print the newest relevant channel posts as a JSON event array.
+
+    A fixed count of raw posts covered five hours in a busy channel, all of
+    them automated notifications. So the default pages back until it has
+    `limit` posts that `context_noise` does not hide, and names on stderr what
+    it hid. `--all` restores the plain newest-N read.
+    """
     config = load_config()
     repo_id = arguments.repo_id
     limit = arguments.limit
@@ -1578,16 +1669,60 @@ def command_context(arguments: argparse.Namespace) -> int:
         limit = int(repo_id)
         repo_id = None
     if limit is None:
-        limit = 20
+        limit = CONTEXT_DEFAULT_LIMIT
     _, channel_id = resolve_project(config, repo_id)
     if limit < 1 or limit > 200:
         raise UserError("Buzz message limit must be between 1 and 200")
-    sys.stdout.write(
-        run_buzz(
-            config,
-            ["messages", "get", "--channel", channel_id, "--limit", str(limit)],
+    if arguments.all:
+        sys.stdout.write(
+            run_buzz(
+                config,
+                ["messages", "get", "--channel", channel_id, "--limit", str(limit)],
+            )
         )
-    )
+        return 0
+
+    def relevant(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        hidden = context_noise(events)
+        return [event for event in events if event_key(event) not in hidden]
+
+    def enough(events: List[Dict[str, Any]]) -> bool:
+        # Read one quick-thread span past the oldest post to be shown, so the
+        # start of every thread it belongs to has been seen.
+        kept = relevant(events)
+        if len(kept) < limit:
+            return False
+        oldest_shown = event_time(kept[-limit])
+        return event_time(events[0]) <= oldest_shown - QUICK_THREAD_SECONDS
+
+    events, truncated = read_channel(config, channel_id, enough=enough)
+    hidden = context_noise(events)
+    shown = [event for event in events if event_key(event) not in hidden][-limit:]
+    sys.stdout.write(json.dumps(shown, ensure_ascii=False) + "\n")
+
+    oldest = event_time(shown[0]) if shown else 0
+    counts: Dict[str, int] = {}
+    for event in events:
+        reason = hidden.get(event_key(event))
+        if reason and event_time(event) >= oldest:
+            counts[reason] = counts.get(reason, 0) + 1
+    if counts or truncated:
+        labels = {"quick": "quick threads", "marker": "machine markers", "routine": "routine"}
+        parts = [
+            "{0} {1}".format(labels[reason], counts[reason])
+            for reason in ("quick", "marker", "routine")
+            if counts.get(reason)
+        ]
+        note = "context: {0} posts from the last {1:.1f} h".format(
+            len(shown), max(0, time.time() - oldest) / 3600 if shown else 0
+        )
+        if parts:
+            note += "; hidden {0} ({1}); --all includes them".format(
+                sum(counts.values()), ", ".join(parts)
+            )
+        if truncated:
+            note += "; stopped after {0} pages".format(MESSAGES_MAX_PAGES)
+        sys.stderr.write(note + "\n")
     return 0
 
 
@@ -1652,11 +1787,127 @@ def thread_root(event: Dict[str, Any]) -> str:
     return str(event.get("id") or "")
 
 
+def event_key(event: Dict[str, Any]) -> str:
+    return str(event.get("id") or "")
+
+
+def event_time(event: Dict[str, Any]) -> int:
+    try:
+        return int(event.get("created_at") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def parse_events(raw: str) -> List[Dict[str, Any]]:
+    try:
+        events = json.loads(raw or "[]")
+    except ValueError as error:
+        raise UserError(
+            "Could not parse channel messages from buzz: {0}".format(error)
+        )
+    if not isinstance(events, list):
+        raise UserError("Unexpected message payload type from buzz")
+    return [event for event in events if isinstance(event, dict)]
+
+
+def read_channel(
+    config: Dict[str, Any],
+    channel_id: str,
+    since: Optional[int] = None,
+    enough: Optional[Any] = None,
+) -> Tuple[List[Dict[str, Any]], bool]:
+    """Read channel events page by page, newest page first.
+
+    Returns the events oldest first and whether the page cap cut the read
+    short. `--before` is the inclusive Nostr `until`, so each boundary second
+    is read twice and deduplicated by event id. Reading stops at a short page,
+    when `enough(events)` holds, or after MESSAGES_MAX_PAGES pages. A full page
+    with nothing new means more than a page shares one second; that counts as
+    cut short too.
+    """
+    collected: Dict[str, Dict[str, Any]] = {}
+    ordered: List[Dict[str, Any]] = []
+    before: Optional[int] = None
+    for _page in range(MESSAGES_MAX_PAGES):
+        args = [
+            "messages", "get", "--channel", channel_id,
+            "--limit", str(MESSAGES_PAGE),
+        ]
+        if since is not None:
+            args += ["--since", str(since)]
+        if before is not None:
+            args += ["--before", str(before)]
+        page = parse_events(run_buzz(config, args))
+        fresh = 0
+        for event in page:
+            if event_key(event) not in collected:
+                collected[event_key(event)] = event
+                fresh += 1
+        ordered = sorted(collected.values(), key=event_time)
+        if len(page) < MESSAGES_PAGE:
+            return ordered, False
+        if fresh == 0:
+            return ordered, True
+        if enough is not None and enough(ordered):
+            return ordered, False
+        before = min(event_time(event) for event in page)
+    return ordered, True
+
+
+def context_noise(events: List[Dict[str, Any]]) -> Dict[str, str]:
+    """Map event ids to the reason `context` hides them by default.
+
+    Only protocol shapes count, never names:
+
+    * ``marker``: the post opens with another tool's protocol marker.
+    * ``routine``: a lifecycle post of a `routine` daily thread.
+    * ``quick``: a lifecycle post of a thread whose result followed its start
+      within QUICK_THREAD_SECONDS. A blocker without such a result stays.
+
+    Plain posts are never hidden, not even inside such a thread: a person's
+    reply is exactly what the next agent must read.
+    """
+    hidden: Dict[str, str] = {}
+    threads: Dict[str, List[Dict[str, Any]]] = {}
+    for event in events:
+        content = str(event.get("content") or "")
+        threads.setdefault(thread_root(event), []).append(event)
+        if FOREIGN_MARKER_RE.match(content):
+            hidden[event_key(event)] = "marker"
+            continue
+        match = parse_marker(content)
+        if match is not None and match.group(3).startswith("routine-"):
+            hidden[event_key(event)] = "routine"
+
+    for root, members in threads.items():
+        start = next((event for event in members if event_key(event) == root), None)
+        if start is None:
+            continue
+        start_match = parse_marker(str(start.get("content") or ""))
+        if start_match is None or start_match.group(1) != "started":
+            continue
+        lifecycle = []
+        for event in members:
+            match = parse_marker(str(event.get("content") or ""))
+            if match is not None:
+                lifecycle.append((event, match.group(1) or "result"))
+        begun = event_time(start)
+        if any(
+            phase == "result" and 0 <= event_time(event) - begun <= QUICK_THREAD_SECONDS
+            for event, phase in lifecycle
+        ):
+            for event, _ in lifecycle:
+                hidden.setdefault(event_key(event), "quick")
+    return hidden
+
+
 def command_open(arguments: argparse.Namespace) -> int:
     """List update threads that started but never reached a closing phase.
 
     Mirrors 'context' argument handling: a bare number is a limit, a repo id
-    may be given explicitly. Output is deterministic JSON for tooling.
+    may be given explicitly. Without a limit it reads every message of the
+    last `--hours` (default a week), so a start from days ago that is still
+    open is not pushed out by newer traffic. Output is deterministic JSON.
     """
     config = load_config()
     repo_id = arguments.repo_id
@@ -1666,23 +1917,27 @@ def command_open(arguments: argparse.Namespace) -> int:
             raise UserError("Give at most one numeric argument to 'open'")
         limit = int(repo_id)
         repo_id = None
-    if limit is None:
-        limit = 100
-    if limit < 1 or limit > 200:
+    hours = arguments.hours
+    if limit is not None and hours is not None:
+        raise UserError("Give either a message limit or --hours to 'open', not both")
+    if limit is not None and (limit < 1 or limit > 200):
         raise UserError("Buzz message limit must be between 1 and 200")
+    if hours is not None and hours < 1:
+        raise UserError("--hours must be at least 1")
     repo_id, channel_id = resolve_project(config, repo_id)
-    raw = run_buzz(
-        config,
-        ["messages", "get", "--channel", channel_id, "--limit", str(limit)],
-    )
-    try:
-        events = json.loads(raw or "[]")
-    except ValueError as error:
-        raise UserError(
-            "Could not parse channel messages from buzz: {0}".format(error)
+    truncated = False
+    if limit is not None:
+        events = parse_events(
+            run_buzz(
+                config,
+                ["messages", "get", "--channel", channel_id, "--limit", str(limit)],
+            )
         )
-    if not isinstance(events, list):
-        raise UserError("Unexpected message payload type from buzz")
+    else:
+        hours = hours or OPEN_DEFAULT_HOURS
+        events, truncated = read_channel(
+            config, channel_id, since=int(time.time()) - hours * 3600
+        )
 
     threads = {}
     for event in events:
@@ -1734,6 +1989,8 @@ def command_open(arguments: argparse.Namespace) -> int:
                 "repo_id": repo_id,
                 "channel_id": channel_id,
                 "reviewed": len(events),
+                "hours": hours if limit is None else None,
+                "truncated": truncated,
                 "open": open_threads,
             },
             indent=2,
@@ -2216,10 +2473,17 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
 
     install = sub.add_parser("install", help="Copy this helper to a stable local path")
-    install.add_argument(
+    install_mode = install.add_mutually_exclusive_group()
+    install_mode.add_argument(
         "--check",
         action="store_true",
         help="Check whether the installed helper exactly matches this plugin version",
+    )
+    install_mode.add_argument(
+        "--sync",
+        action="store_true",
+        help="Replace the installed helper only if this one is newer; never fails "
+        "(used by the plugin's SessionStart hook)",
     )
     install.set_defaults(handler=command_install)
 
@@ -2239,9 +2503,18 @@ def build_parser() -> argparse.ArgumentParser:
     resolve.add_argument("repo_id", nargs="?", default=None)
     resolve.set_defaults(handler=command_resolve)
 
-    context = sub.add_parser("context", help="Read recent project messages")
+    context = sub.add_parser(
+        "context",
+        help="Read the newest relevant project messages (default 20); "
+        "quick notification threads, machine markers and routine are hidden",
+    )
     context.add_argument("repo_id", nargs="?", default=None)
     context.add_argument("limit", nargs="?", type=int, default=None)
+    context.add_argument(
+        "--all",
+        action="store_true",
+        help="Read the newest messages unfiltered, exactly as Buzz returns them",
+    )
     context.set_defaults(handler=command_context)
 
     open_cmd = sub.add_parser(
@@ -2250,6 +2523,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     open_cmd.add_argument("repo_id", nargs="?", default=None)
     open_cmd.add_argument("limit", nargs="?", type=int, default=None)
+    open_cmd.add_argument(
+        "--hours",
+        type=int,
+        default=None,
+        help="Look back this many hours (default {0}); a limit reads the newest "
+        "messages instead".format(OPEN_DEFAULT_HOURS),
+    )
     open_cmd.set_defaults(handler=command_open)
 
     notice = sub.add_parser("notice", help="Show a result link in the channel without a broadcast")

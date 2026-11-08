@@ -20,8 +20,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -89,9 +91,23 @@ elif sys.argv[1:3] == ["messages", "get"]:
     # The real CLI is a binary that writes UTF-8 bytes whatever its locale;
     # FAKE_BUZZ_MESSAGES may hold characters the invoking console cannot
     # encode, so print() would die before the helper under test even runs.
-    sys.stdout.buffer.write(
-        os.environ.get("FAKE_BUZZ_MESSAGES", "[]").encode("utf-8")
-    )
+    # Like the relay, it applies --since and the inclusive --before (Nostr
+    # until), keeps the newest --limit events and prints them oldest first.
+    raw = os.environ.get("FAKE_BUZZ_MESSAGES", "[]")
+    args = sys.argv[1:]
+    def option(name):
+        return int(args[args.index(name) + 1]) if name in args else None
+    events = json.loads(raw)
+    since, before, limit = option("--since"), option("--before"), option("--limit")
+    events = [
+        event for event in events
+        if (since is None or event.get("created_at", 0) >= since)
+        and (before is None or event.get("created_at", 0) <= before)
+    ]
+    events.sort(key=lambda event: event.get("created_at", 0))
+    if limit is not None:
+        events = events[-limit:]
+    sys.stdout.buffer.write(json.dumps(events, ensure_ascii=False).encode("utf-8"))
 else:
     print(json.dumps({"accepted": True, "event_id": "a" * 64}))
 """
@@ -700,35 +716,167 @@ class ProjectRouting(HelperTestCase):
         self.assertEqual([], self.calls())
 
 
-class ContextArguments(HelperTestCase):
+CHANNEL = "11111111-1111-1111-1111-111111111111"
+
+
+def channel_event(event_id, content, created_at, root=None):
+    tags = [["h", CHANNEL]]
+    if root is not None:
+        tags.append(["e", root, "", "reply"])
+    return {
+        "id": event_id,
+        "content": content,
+        "created_at": created_at,
+        "kind": 9,
+        "pubkey": "e" * 64,
+        "tags": tags,
+    }
+
+
+def quick_threads(count, first, agent="rollout.bot"):
+    """Lifecycle threads that close ten seconds after they open."""
+    events = []
+    for index in range(count):
+        start = first + index * 100
+        root = "q{0}".format(index)
+        events.append(channel_event(
+            root,
+            "[AGENT-ACTIVITY:started:{0}:ship-{1}]: #\n\nRollout.".format(agent, index),
+            start,
+        ))
+        events.append(channel_event(
+            root + "r",
+            "[AGENT-RESULT:{0}:ship-{1}]: #\n\nLive.".format(agent, index),
+            start + 10,
+            root=root,
+        ))
+    return events
+
+
+class ContextCase(HelperTestCase):
     def setUp(self):
         super().setUp()
         os.chdir(self.workspace)
+        self.now = int(time.time())
 
     def gets(self):
         return [c for c in self.calls() if c[:2] == ["messages", "get"]]
 
+    def messages(self, events):
+        os.environ["FAKE_BUZZ_MESSAGES"] = json.dumps(events)
+
+    def context(self, argv):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            self.assertEqual(0, self.run_cli(argv))
+        return [event["id"] for event in json.loads(stdout.getvalue())], stderr.getvalue()
+
+
+class ContextArguments(ContextCase):
+    def posts(self, count):
+        self.messages([
+            channel_event("p{0}".format(index), "Beitrag {0}".format(index), self.now - 1000 + index)
+            for index in range(count)
+        ])
+
     def test_bare_number_is_read_as_a_limit(self):
-        self.assertEqual(0, self.run_cli(["context", "3"]))
+        self.posts(5)
+        self.assertEqual(["p2", "p3", "p4"], self.context(["context", "3"])[0])
         call = self.gets()[0]
-        self.assertEqual("3", call[call.index("--limit") + 1])
-        self.assertEqual(
-            "11111111-1111-1111-1111-111111111111", call[call.index("--channel") + 1]
-        )
+        self.assertEqual(CHANNEL, call[call.index("--channel") + 1])
 
     def test_repo_id_and_limit_still_work(self):
-        self.assertEqual(0, self.run_cli(["context", "codeapp", "7"]))
-        call = self.gets()[0]
-        self.assertEqual("7", call[call.index("--limit") + 1])
+        self.posts(10)
+        self.assertEqual(7, len(self.context(["context", "codeapp", "7"])[0]))
 
     def test_default_limit_is_twenty(self):
-        self.assertEqual(0, self.run_cli(["context"]))
-        call = self.gets()[0]
-        self.assertEqual("20", call[call.index("--limit") + 1])
+        self.posts(30)
+        self.assertEqual(
+            ["p{0}".format(index) for index in range(10, 30)],
+            self.context(["context"])[0],
+        )
+
+    def test_all_reads_the_newest_messages_unfiltered_in_one_call(self):
+        self.messages(quick_threads(3, self.now - 1000))
+        shown, note = self.context(["context", "--all", "4"])
+        self.assertEqual(["q1", "q1r", "q2", "q2r"], shown)
+        self.assertEqual("", note)
+        self.assertEqual(1, len(self.gets()))
+        self.assertEqual("4", self.gets()[0][self.gets()[0].index("--limit") + 1])
 
     def test_limit_out_of_range_is_rejected(self):
         self.assertEqual(1, self.run_cli(["context", "500"]))
         self.assertEqual([], self.gets())
+
+
+class ContextFilter(ContextCase):
+    """`context` must show what the next agent has to know.
+
+    In the week up to 08.11. a busy channel's newest 20 posts covered five
+    hours and all of them were automated notifications: threads that opened and
+    closed within minutes, plus another tool's protocol posts.
+    """
+
+    def test_notifications_machine_posts_and_routine_are_hidden_people_are_not(self):
+        t = self.now - 7200
+        self.messages([
+            channel_event("o1", "Ältere Absprache im Kanal", t - 100),
+            channel_event("q1", "[AGENT-ACTIVITY:started:rollout.bot:ship-1]: #\n\nRollout.", t),
+            channel_event("q1r", "[AGENT-RESULT:rollout.bot:ship-1]: #\n\nLive.", t + 60, root="q1"),
+            channel_event("q1h", "Warum schon wieder?", t + 90, root="q1"),
+            channel_event("s1", "[AGENT-ACTIVITY:started:claude.stratos:feature-1]: #\n\n**Feature**", t + 100),
+            channel_event("b1", "[AGENT-ACTIVITY:started:codex.petra:deploy-1]: #\n\nDeploy", t + 200),
+            channel_event("b1b", "[AGENT-ACTIVITY:blocked:codex.petra:deploy-1]: #\n\nSperre.", t + 230, root="b1"),
+            channel_event("m1", "[TOOL-ORDER:ship:abc] @repo Auftrag", t + 300),
+            channel_event("m1r", "[TOOL-RESULT:ship-abc:def] \nErgebnis", t + 320, root="m1"),
+            channel_event("r1", "[AGENT-ACTIVITY:progress:claude.stratos:routine-2026-11-08-aaaaaaaaaaaa]: #\n\nPrüfung", t + 400),
+            channel_event("r1a", "[AGENT-ACTIVITY:progress:claude.stratos:routine-2026-11-08-aaaaaaaaaaaa-1]: #\n\nBefund", t + 401, root="r1"),
+            channel_event("w1", "[WIP: Entwurf] bitte noch nicht mergen", t + 500),
+            channel_event("s1r", "[AGENT-RESULT:claude.stratos:feature-1]: #\n\nFertig.", t + 4000, root="s1"),
+        ])
+        shown, note = self.context(["context"])
+        self.assertEqual(["o1", "q1h", "s1", "b1", "b1b", "w1", "s1r"], shown)
+        self.assertIn(
+            "hidden 6 (quick threads 2, machine markers 2, routine 2); --all", note
+        )
+
+    def test_pages_back_until_enough_relevant_posts(self):
+        t = self.now - 90000
+        plain = [channel_event("p{0}".format(i), "Absprache {0}".format(i), t + i) for i in range(6)]
+        self.messages(plain + quick_threads(10, t + 1000))
+        with mock.patch.object(project_buzz, "MESSAGES_PAGE", 4):
+            shown, note = self.context(["context", "3"])
+        self.assertEqual(["p3", "p4", "p5"], shown)
+        self.assertIn("hidden 20 (quick threads 20)", note)
+        gets = self.gets()
+        self.assertGreater(len(gets), 1)
+        self.assertNotIn("--before", gets[0])
+        self.assertIn("--before", gets[1])
+
+    def test_a_result_at_a_page_edge_waits_for_its_start(self):
+        # Page size 2 puts the quick result on one page and its start on the
+        # next. Stopping as soon as three posts look relevant would show the
+        # result as if it were news.
+        t = self.now - 9000
+        self.messages([
+            channel_event("p0", "Absprache 0", t - 1000),
+            channel_event("s", "[AGENT-ACTIVITY:started:rollout.bot:x]: #\n\nRollout.", t),
+            channel_event("r", "[AGENT-RESULT:rollout.bot:x]: #\n\nLive.", t + 10, root="s"),
+            channel_event("p1", "Absprache 1", t + 20),
+            channel_event("p2", "Absprache 2", t + 30),
+        ])
+        with mock.patch.object(project_buzz, "MESSAGES_PAGE", 2):
+            shown, _ = self.context(["context", "3"])
+        self.assertEqual(["p0", "p1", "p2"], shown)
+
+    def test_page_cap_stops_and_says_so(self):
+        self.messages(quick_threads(10, self.now - 5000))
+        with mock.patch.object(project_buzz, "MESSAGES_PAGE", 2), \
+                mock.patch.object(project_buzz, "MESSAGES_MAX_PAGES", 3):
+            shown, note = self.context(["context"])
+        self.assertEqual([], shown)
+        self.assertIn("stopped after 3 pages", note)
+        self.assertEqual(3, len(self.gets()))
 
 
 class ConsoleEncoding(HelperTestCase):
@@ -861,6 +1009,88 @@ class Install(HelperTestCase):
         target = self.home / "bin" / "project-buzz"
         target.write_text(target.read_text(encoding="utf-8") + "\n# drift\n", encoding="utf-8")
         self.assertEqual(1, self.run_cli(["install", "--check"]))
+
+    def installed_with_version(self, version):
+        """Install a copy of this helper that claims another version."""
+        target = self.home / "bin" / "project-buzz"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        source = (SCRIPTS / "project-buzz").read_text(encoding="utf-8")
+        target.write_text(
+            source.replace(
+                'HELPER_VERSION = "{0}"'.format(project_buzz.HELPER_VERSION),
+                'HELPER_VERSION = "{0}"'.format(version),
+            ),
+            encoding="utf-8",
+        )
+        return target
+
+    def sync(self):
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            self.assertEqual(0, self.run_cli(["install", "--sync"]))
+        return stdout.getvalue()
+
+    def test_sync_replaces_an_older_copy_and_says_so(self):
+        # The drift seen on colleagues' machines: the plugin cache was updated,
+        # the stable copy stayed at the version of the last setup run.
+        target = self.installed_with_version("0.1.0")
+        output = self.sync()
+        self.assertEqual(
+            (SCRIPTS / "project-buzz").read_bytes(), target.read_bytes()
+        )
+        self.assertIn("from 0.1.0 to {0}".format(project_buzz.HELPER_VERSION), output)
+        self.assertEqual([], list(target.parent.glob(".project-buzz.*.tmp")))
+
+    def test_sync_installs_a_missing_copy(self):
+        self.sync()
+        self.assertEqual(0, self.run_cli(["install", "--check"]))
+
+    def test_sync_never_downgrades_or_touches_an_equal_version(self):
+        for version in ("99.0.0", project_buzz.HELPER_VERSION):
+            with self.subTest(version=version):
+                target = self.installed_with_version(version)
+                target.write_text(
+                    target.read_text(encoding="utf-8") + "\n# local change\n",
+                    encoding="utf-8",
+                )
+                before = target.read_bytes()
+                self.assertEqual("", self.sync())
+                self.assertEqual(before, target.read_bytes())
+
+    def test_sync_reports_failure_but_never_fails_the_session(self):
+        # A file where the bin directory belongs makes every write fail.
+        (self.home / "bin").write_text("not a directory", encoding="utf-8")
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            self.assertEqual("", self.sync())
+        self.assertIn("helper sync skipped", stderr.getvalue())
+
+    def test_session_start_hook_runs_the_sync(self):
+        bash = shutil.which("bash")
+        if bash is None:
+            self.skipTest("bash is not available")
+        hooks = json.loads(
+            (SCRIPTS.parent / "hooks" / "hooks.json").read_text(encoding="utf-8")
+        )
+        entries = hooks["hooks"]["SessionStart"]
+        self.assertEqual(1, len(entries))
+        self.assertNotIn("matcher", entries[0])
+        command = entries[0]["hooks"][0]["command"]
+        self.assertIn("install --sync", command)
+        target = self.installed_with_version("0.1.0")
+        environment = dict(os.environ)
+        environment["CLAUDE_PLUGIN_ROOT"] = str(SCRIPTS.parent)
+        completed = subprocess.run(
+            [bash, "-c", command],
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=60,
+        )
+        self.assertEqual(0, completed.returncode)
+        self.assertEqual(
+            (SCRIPTS / "project-buzz").read_bytes(), target.read_bytes()
+        )
 
     def test_helper_version_matches_both_manifests(self):
         repository = SCRIPTS.parents[2]
@@ -1502,9 +1732,22 @@ class OpenView(HelperTestCase):
     def setUp(self):
         super().setUp()
         os.chdir(self.workspace)
+        # Fixture times are small offsets; shift them into the default window.
+        self.base = int(time.time()) - 3600
+
+    def messages(self, events):
+        for event in events:
+            event["created_at"] = self.base + event["created_at"]
+        os.environ["FAKE_BUZZ_MESSAGES"] = json.dumps(events)
+
+    def open_view(self, argv=("open",)):
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            self.assertEqual(0, self.run_cli(list(argv)))
+        return json.loads(stdout.getvalue())
 
     def test_open_lists_only_threads_without_a_closing_phase(self):
-        os.environ["FAKE_BUZZ_MESSAGES"] = json.dumps(
+        self.messages(
             [
                 {
                     "id": "r1",
@@ -1564,7 +1807,7 @@ class OpenView(HelperTestCase):
         self.assertEqual(["open-1-start"], open_ids)
 
     def test_open_reads_the_definition_shape(self):
-        os.environ["FAKE_BUZZ_MESSAGES"] = json.dumps(
+        self.messages(
             [
                 {
                     "id": "r1",
@@ -1593,17 +1836,51 @@ class OpenView(HelperTestCase):
         self.assertEqual(["neu-1"], [entry["update_id"] for entry in payload["open"]])
         self.assertEqual("**Neue Form**", payload["open"][0]["snippet"])
 
-    def test_open_default_limit_and_repo_are_echoed(self):
+    def test_open_reads_the_last_week_by_default(self):
         os.environ["FAKE_BUZZ_MESSAGES"] = "[]"
-        stdout = io.StringIO()
-        with contextlib.redirect_stdout(stdout):
-            self.assertEqual(0, self.run_cli(["open"]))
+        payload = self.open_view()
         call = [c for c in self.calls() if c[:2] == ["messages", "get"]][0]
-        self.assertEqual("100", call[call.index("--limit") + 1])
-        payload = json.loads(stdout.getvalue())
+        self.assertEqual("200", call[call.index("--limit") + 1])
+        since = int(call[call.index("--since") + 1])
+        self.assertAlmostEqual(time.time() - 168 * 3600, since, delta=60)
         self.assertEqual("codeapp", payload["repo_id"])
         self.assertEqual([], payload["open"])
         self.assertEqual(0, payload["reviewed"])
+        self.assertEqual(168, payload["hours"])
+        self.assertFalse(payload["truncated"])
+
+    def test_an_old_open_start_is_found_behind_newer_traffic(self):
+        # Three days old and still open: a fixed count of newest messages
+        # pushed exactly this thread out of view.
+        events = [{
+            "id": "alt",
+            "tags": [],
+            "content": "[AGENT-ACTIVITY:started:claude.stratos:alt-1]: #\n\nNoch offen",
+            "created_at": -3 * 86400,
+        }]
+        for index in range(6):
+            root = "n{0}".format(index)
+            events.append({"id": root, "tags": [], "created_at": index * 10,
+                           "content": "[AGENT-ACTIVITY:started:rollout.bot:n-{0}]: #\n\nA".format(index)})
+            events.append({"id": root + "r", "tags": [["e", root, "", "reply"]], "created_at": index * 10 + 1,
+                           "content": "[AGENT-RESULT:rollout.bot:n-{0}]: #\n\nB".format(index)})
+        self.messages(events)
+        with mock.patch.object(project_buzz, "MESSAGES_PAGE", 3):
+            payload = self.open_view()
+        self.assertEqual(["alt-1"], [entry["update_id"] for entry in payload["open"]])
+        self.assertEqual(13, payload["reviewed"])
+
+    def test_a_limit_reads_the_newest_messages_once(self):
+        os.environ["FAKE_BUZZ_MESSAGES"] = "[]"
+        payload = self.open_view(["open", "codeapp", "50"])
+        gets = [c for c in self.calls() if c[:2] == ["messages", "get"]]
+        self.assertEqual(1, len(gets))
+        self.assertNotIn("--since", gets[0])
+        self.assertIsNone(payload["hours"])
+
+    def test_limit_and_hours_together_are_rejected(self):
+        self.assertEqual(1, self.run_cli(["open", "50", "--hours", "24"]))
+        self.assertEqual([], [c for c in self.calls() if c[:2] == ["messages", "get"]])
 
     def test_bare_number_is_read_as_a_limit(self):
         os.environ["FAKE_BUZZ_MESSAGES"] = "[]"

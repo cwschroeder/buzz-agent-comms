@@ -90,6 +90,7 @@ plugins/buzz-comms/
 │   ├── ponytail-review.md               # explicit simplification review
 │   ├── reflect.md                       # /buzz-comms:reflect: session learnings
 │   └── handoff.md                       # /buzz-comms:handoff: handover note
+├── hooks/hooks.json                     # SessionStart: refresh the installed helper
 ├── scripts/project-buzz                 # the deterministic helper (Python 3.8+)
 ├── tests/test_project_buzz.py           # unittest suite, runs without a relay
 └── tests/test_buzz_app_lifecycle.py     # marker parity with the Buzz 1.0 plugin (node)
@@ -148,6 +149,11 @@ Three policy surfaces and one mechanics layer have separate responsibilities:
   `SessionEnd` cannot hand anything back to the model, so an automatic variant
   would reflect after every single answer on every colleague's machine. The
   same reasoning kept modes and permanent hooks out of `ponytail-review`.
+  The plugin's only hook is mechanical, not a policy surface: on
+  `SessionStart` it runs `project-buzz install --sync`, which replaces the
+  installed helper copy when the plugin carries a newer `HELPER_VERSION`. It
+  prints one line only when it replaced the copy, never downgrades, and always
+  exits 0.
   `handoff` covers the other half of session memory: `/buzz-comms:handoff`
   writes what only the current session knows, outside the repository, before a
   compaction takes it. Its skill states the boundary against
@@ -184,6 +190,9 @@ Everything lives under `~/.config/buzz-agent`, overridable with
 
 The helper is installed to `~/.config/buzz-agent/bin/project-buzz` by
 `project-buzz install`, so nothing at runtime depends on where the plugin sits.
+The SessionStart hook keeps that copy current after plugin updates
+(`install --sync`); before 0.32.0 the copy stayed at the version of the last
+setup run until someone ran setup again.
 Docs and skill must always reference the installed path, never the plugin path.
 
 ### Identity model
@@ -234,6 +243,14 @@ change these without changing the owner side in lockstep:
   `key: <value>` assignments of at least 16 characters) are rejected before
   any publish. Keep every pattern small, documented, and covered by a test;
   the guard is a safety net, not an exhaustive secret detector.
+- **Reading the channel.** `messages get` returns one page of at most 200
+  events, so `context` and `open` page back with `--before` (the inclusive
+  Nostr `until`, deduplicated by event id) and stop after `MESSAGES_MAX_PAGES`.
+  `context` hides by protocol shape only: posts opening with a non-`AGENT-`
+  machine marker, `routine-` update ids, and lifecycle posts of threads whose
+  result came within `QUICK_THREAD_SECONDS` of the start. Never filter on
+  agent or tool names, and never hide a plain post, not even inside such a
+  thread. `--all` restores the unfiltered newest-N read.
 - **CLI timeouts.** `run_buzz` times out after a bounded number of seconds
   (default 60, `BUZZ_AGENT_CLI_TIMEOUT_SECONDS` for tests). A hung CLI raises
   `UserError`; it must never hang the agent.

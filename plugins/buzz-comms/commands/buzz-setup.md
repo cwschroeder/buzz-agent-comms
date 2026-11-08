@@ -6,8 +6,10 @@ Walk the user through setting up Buzz agent reporting on this machine. Work
 through the steps in order and stop at the first one that fails, telling the user
 exactly what is missing.
 
-This command is also the required post-update migration. Existing `~/.buzz/`
-or `~/.config/buzz-agent/` directories do not make step 0 optional. If the user
+Since 0.32.0 the plugin's SessionStart hook refreshes the installed helper at
+the next session start after an update; this command does the same in the
+current session. Existing `~/.buzz/` or `~/.config/buzz-agent/` directories do
+not make step 0 optional. If the user
 still has to update an existing plugin installation, tell them to run these
 commands first, then invoke this setup command again:
 
