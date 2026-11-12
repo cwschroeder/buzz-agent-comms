@@ -115,11 +115,13 @@ that source drift could not be checked.
    cannot continue safely, use `blocked` instead and name the concrete
    dependency.
 
-   A result stays inside the thread. Use `notice` for a top-level link when
-   colleagues should see it in the channel. Reserve `--im-kanal` for urgent,
-   actionable blockers: it shows the reply in the timeline and notifies every
-   member at high priority, even in a muted channel. Ordinary review requests,
-   delivered changes and findings do not automatically justify that broadcast.
+   A result stays inside the thread. Add `--im-kanal` to `result` or
+   `blocked` when people in the channel should read it without opening the
+   thread: a merge request that now needs a reviewer, a finding, a delivered
+   change, or a blocker someone has to resolve. Buzz then shows the reply in
+   the timeline and notifies every member at high priority, even in a muted
+   channel. Routine steps such as a push, a rebase or a retry stay in the
+   thread without the flag.
 
    ```bash
    project-buzz result <update-id> <root-event-id> "<result>" --im-kanal [repo-id]
@@ -127,7 +129,8 @@ that source drift could not be checked.
 
 Use a stable, unique ID such as `claude-20260807-auth-refactor-start`. A retry
 with the same phase and ID is deduplicated and returns the stored result, so a
-failed publish can be retried verbatim.
+failed publish can be retried verbatim. Exit 75 means another call is still
+publishing that ID: wait and retry the same command.
 
 ### Corrections are top-level posts, never thread replies
 
@@ -389,11 +392,11 @@ A -> recovered -> A, and retries an unfinished publication before a newer one.
 Daily threads carry progress markers, so they do not masquerade as unfinished
 implementation work. An actual repair still needs its own start and result.
 
-For ordinary channel visibility, use
+To make an already published result visible later, use
 `project-buzz notice <update-id> <result-event-id> "<short effect>" [repo-id]`.
 This creates a top-level link, without the broadcast flag. Members' normal
-notification preferences still apply. Reserve `--im-kanal` for an urgent,
-actionable blocker that needs every member's attention.
+notification preferences still apply. Results in the four `--im-kanal` cases
+of step 7 carry the flag themselves and need no notice.
 
 `project-buzz bericht report.json` renders supplied facts as Markdown. Supply
 `summary`, `state` (analysed, review_ready, merged, deployed, verified, blocked),

@@ -47,6 +47,10 @@ Was trotzdem gilt:
   Nebeneffekt des Pushs. Er wird nur auf ausdrückliche Ansage nachgeführt.
 - Wer nicht Maintainer dieses Repos ist, arbeitet weiter über Branch und Merge
   Request.
+- Worktrees bleiben nur, solange ihr Merge Request offen ist oder an ihnen
+  gearbeitet wird. Danach entfernt sie `git worktree remove <pfad>`, ohne
+  `--force`; der Branch darf bleiben. Auch Export-Worktrees für den
+  öffentlichen Marketplace werden nach dem Push entfernt.
 
 ## Repository layout
 
@@ -129,7 +133,8 @@ Three policy surfaces and one mechanics layer have separate responsibilities:
 - **`skills/engineering-contract/SKILL.md`** holds the shared development
   contract: worktrees, contributor merge requests, maintainer-only merges and
   deployments, infrastructure ownership, cohesive simplicity, Impeccable UI
-  work, and local AI for customer data. The optional `ponytail-review` skill
+  work (Taste owns new public company pages when installed; one design skill
+  per run), and local AI for customer data. Neither design skill is vendored. The optional `ponytail-review` skill
   inspects a requested diff for avoidable complexity without editing it or
   replacing normal review gates.
 - **`skills/buzz-team-communication/SKILL.md` and the commands** hold the Buzz
@@ -256,8 +261,23 @@ change these without changing the owner side in lockstep:
   `UserError`; it must never hang the agent.
 - **Agent name shape.** `<client>.<person>`, lowercase, from config only, never a
   caller argument. A bare `claude` would be charged to the owner's seat ledger.
+  The one exception is owner mode: with the global `--owner` flag the
+  maintainer's pilot helper passes agent, repo, channel, identity and lock
+  directory per call (`BUZZ_COMMS_OWNER_*`, `BUZZ_RELAY_URL`,
+  `BUZZ_PRIVATE_KEY`, `BUZZ_AUTH_TAG`), and bare names such as `codex` or
+  `firstmate` are allowed. Without the flag those variables are ignored. Owner
+  mode reads nothing from `BUZZ_AGENT_HOME`, takes @-mention names only from
+  `BUZZ_COMMS_OWNER_NAMES` (its publish path never waits on the relay) and
+  keeps the pilot's lock names `project-<repo>-<agent>-<phase>-<id>.lock`, so
+  receipts the pilot stored before 0.33.0 still deduplicate. Never document
+  `--owner` for colleagues.
 - **Deduplication.** The lock directory is the mutex; a failed publish must
-  release it so the documented same-ID retry works.
+  release it so the documented same-ID retry works. A lock without
+  `output.json` means another call is still publishing: exit 75, retry later.
+- **Refusal wording is read by the owner's watchdog.** `factory_health` treats
+  `must contain 1-16000 characters`, `German Buzz prose must use real
+  umlauts`, `must not contain secret material` and `must not mention an agent`
+  as permanent and rewrites the post; keep those substrings.
 - **Attachments are top-level** and carry no lifecycle marker. Never fold them
   into the collapsible lifecycle thread.
 - **Fail closed.** An unregistered workspace or unknown repo id is an error;

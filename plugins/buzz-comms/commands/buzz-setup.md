@@ -259,7 +259,37 @@ explicitly when opening a request:
 If the host does not resolve or the API does not answer, the instance is
 usually reachable only through the company VPN. Connect it and repeat the check.
 
-## 9. Verify
+## 9. Design skills for UI work
+
+Skip this step when the user does no UI work. It never stops the setup: it
+reports what is installed and gives the user the commands for what is missing.
+The `engineering-contract` section "UI work uses Impeccable" says which skill
+owns which page.
+
+1. Impeccable is required for any UI change. Check whether `impeccable` appears
+   in your available skills, or whether an `impeccable/SKILL.md` exists under
+   `~/.claude/skills/` or the project's `.claude/skills/`. If it is missing, the
+   user installs it in their own terminal (Node.js 18.19 or newer), then
+   restarts Claude Code:
+
+   ```bash
+   npx impeccable install
+   ```
+
+2. Taste is optional and builds new public company pages. Check whether
+   `design-taste-frontend` appears in your available skills, also under the
+   `taste-skill:` plugin namespace. If the user wants it, they type these
+   commands in Claude Code themselves; it needs Node 22 or newer and Chrome,
+   Edge or Chromium:
+
+   ```text
+   /plugin marketplace add Leonxlnx/taste-skill
+   /plugin install taste-skill@taste-skill
+   ```
+
+Do not run either installation yourself.
+
+## 10. Verify
 
 ```bash
 ~/.config/buzz-agent/bin/project-buzz doctor

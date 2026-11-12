@@ -28,7 +28,9 @@ lokalen Helper für signierte, deduplizierte Buzz-Nachrichten.
   `glab mr create`, nicht per `buzz pr open`.
 - Verpflichtet Claude bei jeder UI- und UX-Arbeit, den installierten
   `impeccable`-Skill vollständig zu laden und dessen Workflow anzuwenden. Fehlt
-  der Skill, darf der Agent die Oberfläche nicht verändern.
+  der Skill, darf der Agent die Oberfläche nicht verändern. Neue öffentliche
+  Firmenseiten baut der Taste-Skill, wenn er installiert ist; je Seite führt
+  genau ein Design-Skill.
 - Bevorzugt bei Zugriff auf Kundendaten einen verifiziert lokalen KI-Pfad und
   verbietet einen stillen Cloud-Fallback. Kundendaten müssen vor jeder
   Veröffentlichung entfernt oder sicher anonymisiert werden.
@@ -99,7 +101,7 @@ lokalen Helper für signierte, deduplizierte Buzz-Nachrichten.
 
 | Komponente | Aufgabe |
 |---|---|
-| `engineering-contract` | Zwölf Regeln der Arbeitsdisziplin, Worktrees, Merge Requests, Maintainer-Rollen, Beiträge über das Buzz-Git-Remote, prüfbare Sicherheitsregeln, Impeccable und lokale KI bei Kundendaten |
+| `engineering-contract` | Zwölf Regeln der Arbeitsdisziplin, Worktrees, Merge Requests, Maintainer-Rollen, Beiträge über das Buzz-Git-Remote, prüfbare Sicherheitsregeln, Impeccable und Taste, lokale KI bei Kundendaten |
 | `buzz-team-communication` | Verbindlicher Kommunikations- und Delivery-Proof-Workflow |
 | `no-ai-slop` | Redigiert jeden Lifecycle-Text, bevor er im Kanal landet |
 | `show-me` | Wählt Vergleiche, Screenshots, gerenderte Diagramme, als Code gerenderte Animationen oder Aufnahmen; bietet Text-Fallbacks ohne zusätzliche Werkzeuge |
@@ -146,6 +148,16 @@ installiert sein. Das Plugin enthält die verbindliche Aktivierungs- und
 Abbruchregel, vendiert den externen Skill aber nicht. Der Agent lädt vor jeder
 UI-Änderung dessen vollständige Anleitung, Projekt- und Designkontext sowie den
 passenden Impeccable-Arbeitsablauf.
+
+Der Taste-Skill (`design-taste-frontend`, MIT, `Leonxlnx/taste-skill`) ist
+optional und ebenfalls nicht vendiert. Ist er installiert, baut er neue oder
+neu gestaltete öffentliche Firmenseiten: Landingpages, Firmen- und
+Produktseiten, Shops, Studios. Beide Skills bringen einen eigenen
+Richtungsschritt und eine eigene Abschlussprüfung mit, deshalb führt je Seite
+genau einer. Taste übernimmt nur, wenn das Projekt für diese Seite kein
+ausgeliefertes `DESIGN.md` hat oder der Nutzer es ersetzen will. App-Ansichten,
+Dashboards, Formulare und Seiten im bestehenden Designsystem bleiben bei
+Impeccable. Fehlt Taste, baut Impeccable auch die öffentliche Seite.
 
 Bei Kundendaten minimiert und anonymisiert der Agent zuerst. Müssen Kundendaten
 verarbeitet werden, prüft er Modellanbieter, Endpunkt, Telemetrie und Fallbacks
@@ -261,11 +273,23 @@ Beiträge und Sicherheitsmeldungen laufen über die oben genannten privaten Wege
   [`impeccable.style`](https://impeccable.style)):
 
   ```bash
-  npx impeccable
+  npx impeccable install
   ```
 
   Eine vorhandene Installation aktualisiert `npx impeccable update`. Ohne den
   Skill darf der Agent laut Vertrag keine Oberfläche verändern.
+- Optional für öffentliche Firmenseiten der Taste-Skill (MIT,
+  [`Leonxlnx/taste-skill`](https://github.com/Leonxlnx/taste-skill)). Er
+  braucht Node 22 oder neuer und ein installiertes Chrome, Edge oder Chromium.
+  In Claude Code installieren:
+
+  ```text
+  /plugin marketplace add Leonxlnx/taste-skill
+  /plugin install taste-skill@taste-skill
+  ```
+
+  `/plugin update` hält ihn aktuell. Ohne Taste übernimmt Impeccable auch
+  öffentliche Seiten.
 - Python 3.8 oder neuer
 - Eine erreichbare Buzz-Relay-Instanz
 - `buzz` für den laufenden Betrieb, das einzige benötigte Programm
@@ -581,7 +605,11 @@ Der Helper schreibt den Protokoll-Marker als Markdown-Linkdefinition in die
 erste Zeile; Buzz zeigt sie nicht an, Leser sehen nur den Text. Die
 Kanal-Zeitleiste zeigt nur Thread-Wurzeln, also Start-Posts, Korrekturen und
 Anhänge. `--im-kanal` zeigt ein `result` oder `blocked` zusätzlich dort an und
-benachrichtigt dabei alle Mitglieder mit hoher Priorität.
+benachrichtigt dabei alle Mitglieder mit hoher Priorität. Das gilt für
+Ergebnisse, die jemand im Kanal lesen soll: ein Merge Request, der ein Review
+braucht, ein Befund, eine ausgelieferte Änderung oder ein Blocker, den jemand
+lösen muss. Routineschritte wie Push, Rebase oder Wiederholung bleiben ohne
+Flag im Thread.
 `correct` widerruft ein bereits publiziertes Ergebnis als eigenen
 Top-Level-Post: Der Helper hängt `Korrigiertes Event:` mit Link auf das
 ersetzte Event an und schließt damit den betroffenen Thread aus der

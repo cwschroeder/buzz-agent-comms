@@ -73,8 +73,8 @@ CONTEXT_DEFAULT_LIMIT = 20
 OPEN_DEFAULT_HOURS = 168
 
 MAX_CONTENT = 16000
-HELPER_VERSION = "0.32.0"
-FORBIDDEN_IN_CONTENT = ("[PILOT-", "[AGENT-")
+HELPER_VERSION = "0.34.0"
+FORBIDDEN_IN_CONTENT = ("[PILOT-", "[AGENT-", "[FABRIK-AUFTRAG:", "[FABRIK-ERGEBNIS:")
 LIFECYCLE_PHASES = ("start", "progress", "blocked", "result")
 GERMAN_ASCII_SUBSTITUTION_RE = re.compile(
     r"(?<!\w)(?:"
@@ -141,6 +141,67 @@ RELAY_MEMBERSHIP_HINT = (
 class UserError(Exception):
     """An error the operator can fix; reported without a traceback."""
 
+    exit_code = 1
+
+
+class PublishInProgress(UserError):
+    """Another call holds the publish lock; the same update ID may be retried."""
+
+    exit_code = 75  # EX_TEMPFAIL, as the owner's pilot helper always answered
+
+
+# --------------------------------------------------------------------------
+# owner mode
+# --------------------------------------------------------------------------
+#
+# The maintainer's pilot helper publishes for many seats (claude, codex,
+# firstmate, scanner, ...) with one identity per repo, kept in its own state.
+# Since 0.33.0 it delegates to this helper instead of reimplementing it, and
+# passes everything per call: `--owner` plus the variables below. Only then
+# are bare agent names allowed, and nothing is read from BUZZ_AGENT_HOME.
+# Without `--owner` the variables are ignored, so a stray export never turns
+# a colleague's installation into an owner seat. A helper older than 0.33.0
+# rejects `--owner` in argparse, so the pilot fails closed against it.
+
+OWNER_AGENT_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,31}$")
+CHANNEL_ID_RE = re.compile(r"^[0-9A-Fa-f-]{36}$")
+OWNER_VARIABLES = (
+    "BUZZ_COMMS_OWNER_REPO",
+    "BUZZ_COMMS_OWNER_CHANNEL",
+    "BUZZ_COMMS_OWNER_LOCKS",
+    "BUZZ_COMMS_OWNER_BUZZ_BIN",
+    "BUZZ_RELAY_URL",
+    "BUZZ_PRIVATE_KEY",
+    "BUZZ_AUTH_TAG",
+)
+OWNER_READS = ("context", "open")
+OWNER_COMMANDS = OWNER_READS + ("start", "progress", "blocked", "result", "correct")
+OWNER: Optional[Dict[str, str]] = None
+
+
+def enter_owner_mode(command: str) -> Dict[str, str]:
+    if command not in OWNER_COMMANDS:
+        raise UserError(
+            "--owner supports only: {0}".format(", ".join(OWNER_COMMANDS))
+        )
+    missing = [name for name in OWNER_VARIABLES if not os.environ.get(name, "").strip()]
+    if missing:
+        raise UserError("--owner needs {0}".format(", ".join(missing)))
+    values = {name: os.environ[name].strip() for name in OWNER_VARIABLES}
+    # Reads publish nothing, so they need no seat.
+    agent = os.environ.get("BUZZ_COMMS_OWNER_AGENT", "").strip()
+    if (agent or command not in OWNER_READS) and not OWNER_AGENT_RE.match(agent):
+        raise UserError("Invalid agent name: {0!r}".format(agent))
+    values["BUZZ_COMMS_OWNER_AGENT"] = agent
+    if not REPO_ID_RE.match(values["BUZZ_COMMS_OWNER_REPO"]):
+        raise UserError("Invalid repo id: {0}".format(values["BUZZ_COMMS_OWNER_REPO"]))
+    if not CHANNEL_ID_RE.match(values["BUZZ_COMMS_OWNER_CHANNEL"]):
+        raise UserError("Invalid Buzz channel ID for {0}".format(values["BUZZ_COMMS_OWNER_REPO"]))
+    # Optional: who may not be @-mentioned. The pilot resolves it from local
+    # config, because its publish path must never wait on the relay.
+    values["names"] = os.environ.get("BUZZ_COMMS_OWNER_NAMES", "")
+    return values
+
 
 def is_windows() -> bool:
     """Single seam for platform behaviour, so tests can exercise both paths."""
@@ -172,6 +233,12 @@ def state_root() -> Path:
 
 
 def load_config() -> Dict[str, Any]:
+    if OWNER is not None:
+        return {
+            "relay_url": OWNER["BUZZ_RELAY_URL"],
+            "agent_name": OWNER["BUZZ_COMMS_OWNER_AGENT"],
+            "buzz_bin": OWNER["BUZZ_COMMS_OWNER_BUZZ_BIN"],
+        }
     path = config_path()
     if not path.is_file():
         raise UserError(
@@ -200,6 +267,11 @@ def save_config(config: Dict[str, Any]) -> None:
 
 
 def load_identity() -> Dict[str, str]:
+    if OWNER is not None:
+        return {
+            "private_key": OWNER["BUZZ_PRIVATE_KEY"],
+            "auth_tag": OWNER["BUZZ_AUTH_TAG"],
+        }
     path = identity_path()
     if not path.is_file():
         raise UserError(
@@ -242,6 +314,8 @@ def save_identity(private_key: str, public_key: str, auth_tag: str) -> None:
 
 
 def agent_name(config: Dict[str, Any]) -> str:
+    if OWNER is not None:
+        return OWNER["BUZZ_COMMS_OWNER_AGENT"]
     name = str(config.get("agent_name") or "").strip()
     if not name:
         raise UserError(
@@ -755,6 +829,15 @@ def resolve_project(
     config: Dict[str, Any], requested: Optional[str] = None
 ) -> Tuple[str, str]:
     """Return (repo_id, channel_id) for an explicit repo id or the cwd."""
+    if OWNER is not None:
+        repo_id = OWNER["BUZZ_COMMS_OWNER_REPO"]
+        if requested and requested != repo_id:
+            raise UserError(
+                "Project {0!r} is not registered for this owner call ({1})".format(
+                    requested, repo_id
+                )
+            )
+        return repo_id, OWNER["BUZZ_COMMS_OWNER_CHANNEL"]
     registered = projects(config)
 
     if requested:
@@ -1009,9 +1092,11 @@ def validate_content(content: str) -> str:
         )
     for forbidden in FORBIDDEN_IN_CONTENT:
         if forbidden in content:
+            # The owner's watchdog reads "must not mention an agent" as a
+            # permanent refusal; the pilot used that wording since 2026-09.
             raise UserError(
-                "Buzz project update must not contain {0!r}: it would inject a "
-                "protocol marker".format(forbidden)
+                "Buzz project update must not mention an agent or inject a "
+                "protocol marker: it contains {0!r}".format(forbidden)
             )
     visible = strip_german_lint_exemptions(content)
     substitutions = sorted(
@@ -1140,7 +1225,11 @@ def validate_mentions(config: Dict[str, Any], channel_id: str, content: str) -> 
     if "@" not in visible:
         return content
 
-    names = channel_identity_names(config, channel_id)
+    if OWNER is not None:
+        names = [line.strip() for line in OWNER["names"].splitlines() if line.strip()]
+        names = names or None
+    else:
+        names = channel_identity_names(config, channel_id)
     if names is None:
         raise UserError(
             "Could not resolve channel identities safely. Retry when Buzz user "
@@ -1151,7 +1240,8 @@ def validate_mentions(config: Dict[str, Any], channel_id: str, content: str) -> 
     for name in names:
         if "@{0}".format(name.casefold()) in lowered:
             raise UserError(
-                "Buzz project update must not mention channel identity @{0}".format(name)
+                "Buzz project update must not mention an agent: channel identity "
+                "@{0}".format(name)
             )
     return content
 
@@ -1181,6 +1271,13 @@ def message_url(channel_id: str, event_id: str) -> str:
 
 
 def lock_directory(repo_id: str, agent: str, phase: str, update_id: str) -> Path:
+    if OWNER is not None:
+        # The pilot's own lock names, so its stored receipts keep deduplicating.
+        root = Path(OWNER["BUZZ_COMMS_OWNER_LOCKS"])
+        root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        return root / "project-{0}-{1}-{2}-{3}.lock".format(
+            repo_id, agent, phase, update_id
+        )
     root = state_root() / "publishes"
     root.mkdir(parents=True, exist_ok=True)
     return root / "{0}-{1}-{2}-{3}.lock".format(repo_id, agent, phase, update_id)
@@ -1221,8 +1318,8 @@ def publish(
             previous = json.loads(stored.read_text(encoding="utf-8"))
             previous["duplicate"] = True
             return previous
-        raise UserError(
-            "Publish is in progress; retry with the same update ID (lock: {0}). "
+        raise PublishInProgress(
+            "This update is still being published; retry with the same update ID (lock: {0}). "
             "A stale lock without output.json needs the recovery in "
             "docs/COMMUNICATION-ROLLOUT.md".format(lock)
         )
@@ -2470,6 +2567,8 @@ def build_parser() -> argparse.ArgumentParser:
         description="Publish coding-agent lifecycle updates to a Buzz project channel.",
     )
     parser.add_argument("--version", action="version", version=HELPER_VERSION)
+    # Owner mode is for the maintainer's pilot only, so --help does not list it.
+    parser.add_argument("--owner", action="store_true", help=argparse.SUPPRESS)
     sub = parser.add_subparsers(dest="command")
 
     install = sub.add_parser("install", help="Copy this helper to a stable local path")
@@ -2639,11 +2738,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     if not getattr(arguments, "handler", None):
         parser.print_help(sys.stderr)
         return 2
+    global OWNER
+    OWNER = None
     try:
+        if arguments.owner:
+            OWNER = enter_owner_mode(arguments.command)
         return arguments.handler(arguments)
     except UserError as error:
         sys.stderr.write("{0}\n".format(error))
-        return 1
+        return error.exit_code
+    finally:
+        OWNER = None
 
 
 if __name__ == "__main__":

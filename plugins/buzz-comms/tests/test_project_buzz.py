@@ -54,6 +54,11 @@ if "--content" in argv:
 log = os.environ["FAKE_BUZZ_LOG"]
 with open(log, "a", encoding="utf-8") as handle:
     handle.write(json.dumps(argv) + "\\n")
+env_log = os.environ.get("FAKE_BUZZ_ENV_LOG")
+if env_log:
+    with open(env_log, "a", encoding="utf-8") as handle:
+        handle.write(json.dumps({name: os.environ.get(name) for name in (
+            "BUZZ_RELAY_URL", "BUZZ_PRIVATE_KEY", "BUZZ_AUTH_TAG")}) + "\\n")
 sleep_sec = os.environ.get("FAKE_BUZZ_SLEEP")
 if sleep_sec:
     import time
@@ -337,6 +342,25 @@ class ContentValidation(HelperTestCase):
     def test_empty_content_is_rejected(self):
         self.assertEqual(1, self.run_cli(["start", "u-1", ""]))
         self.assertEqual([], self.calls())
+
+    def test_refusals_keep_the_wording_the_owner_watchdog_reads(self):
+        # factory_health treats these substrings as a permanent refusal and
+        # rewrites the post; any other wording makes it retry the same text.
+        cases = [
+            ("x" * 16001, "must contain 1-16000 characters"),
+            ("Plan fuer morgen.", "German Buzz prose must use real umlauts"),
+            ("Schlüssel nsec1" + "q" * 58, "must not contain secret material"),
+            ("[FABRIK-AUFTRAG:scout:x] Auftrag", "must not mention an agent"),
+            ("@FirstMate bitte prüfen", "must not mention an agent"),
+        ]
+        for index, (content, wording) in enumerate(cases):
+            with self.subTest(wording=wording):
+                stderr = io.StringIO()
+                with contextlib.redirect_stderr(stderr):
+                    self.assertEqual(1, self.run_cli(["start", "u-%d" % index, content]))
+                self.assertIn(wording, stderr.getvalue())
+        self.assertEqual([], [c for c in self.calls() if c[:2] == ["messages", "send"]])
+
 
     def test_overlong_content_is_rejected(self):
         self.assertEqual(1, self.run_cli(["start", "u-1", "x" * 16001]))
@@ -1345,7 +1369,7 @@ class PolicyContract(unittest.TestCase):
             encoding="utf-8"
         )
         forge_step = setup.split("## 8. Merge requests on a company GitLab", 1)[1].split(
-            "## 9. Verify", 1
+            "## 9. Design skills for UI work", 1
         )[0]
         flowing = " ".join(forge_step.split())
         for phrase in (
@@ -1379,6 +1403,82 @@ class PolicyContract(unittest.TestCase):
         )[0]
         for phrase in ("Scope `api`", "glab auth login --hostname gitlab.example.org"):
             self.assertIn(phrase, section)
+
+    def test_one_design_skill_owns_each_ui_run(self):
+        """Impeccable and Taste both claim landing pages.
+
+        Each brings its own direction step and finish gate, so an agent that
+        loads both for one page mixes two rule sets. The contract names one
+        owner per run, keeps Impeccable as the only hard stop, and setup only
+        reports the skills; the user installs them.
+        """
+        repository = SCRIPTS.parents[2]
+        contract = " ".join(
+            (SCRIPTS.parent / "skills" / "engineering-contract" / "SKILL.md")
+            .read_text(encoding="utf-8")
+            .split()
+        )
+        ui_section = contract.split("## UI work uses Impeccable", 1)[1].split(
+            "## Customer data and model routing", 1
+        )[0]
+        for phrase in (
+            "`design-taste-frontend`",
+            "the `taste-skill:` namespace",
+            "One design skill owns a run",
+            "the project has no shipped `DESIGN.md` for that surface",
+            "Impeccable owns everything else",
+            "its absence never stops the work",
+            "Impeccable stays required for all UI work",
+            "Impeccable's `document` command",
+        ):
+            self.assertIn(phrase, ui_section)
+
+        setup = (SCRIPTS.parent / "commands" / "buzz-setup.md").read_text(
+            encoding="utf-8"
+        )
+        design_step = setup.split("## 9. Design skills for UI work", 1)[1].split(
+            "## 10. Verify", 1
+        )[0]
+        for phrase in (
+            "It never stops the setup",
+            "npx impeccable install",
+            "/plugin marketplace add Leonxlnx/taste-skill",
+            "/plugin install taste-skill@taste-skill",
+            "Do not run either installation yourself.",
+        ):
+            self.assertIn(phrase, design_step)
+
+        readme = (repository / "README.md").read_text(encoding="utf-8")
+        requirements = readme.split("## Voraussetzungen", 1)[1].split(
+            "## Empfohlene Begleit-Plugins", 1
+        )[0]
+        for phrase in (
+            "npx impeccable install",
+            "/plugin install taste-skill@taste-skill",
+        ):
+            self.assertIn(phrase, requirements)
+
+    def test_im_kanal_covers_results_people_must_read(self):
+        """Seen in the week of 1 to 8 November 2026.
+
+        The plugin reserved `--im-kanal` for urgent blockers while the owner's
+        rules used it for review requests, findings and deliveries, so agents
+        on different machines flagged the same kind of result differently.
+        The owner's rule now holds for everyone.
+        """
+        communication = " ".join(
+            (SCRIPTS.parent / "skills" / "buzz-team-communication" / "SKILL.md")
+            .read_text(encoding="utf-8")
+            .split()
+        )
+        for phrase in (
+            "a merge request that now needs a reviewer, a finding, a delivered "
+            "change, or a blocker someone has to resolve",
+            "Routine steps such as a push, a rebase or a retry stay in the "
+            "thread without the flag",
+        ):
+            self.assertIn(phrase, communication)
+        self.assertNotIn("Reserve `--im-kanal`", communication)
 
     def test_buzz_git_remote_contribution_rules_are_binding(self):
         """The rules that keep a forge-less contributor from silent failure.
@@ -1726,6 +1826,127 @@ class CorrectionPhase(HelperTestCase):
         with self.assertRaises(SystemExit):
             self.run_cli(["correct", "corr-4", "Text"])
         self.assertEqual([], self.calls())
+
+
+class OwnerMode(HelperTestCase):
+    """--owner: the maintainer's pilot passes identity and channel per call."""
+
+    CHANNEL = "33333333-3333-3333-3333-333333333333"
+
+    def setUp(self):
+        super().setUp()
+        # No config and no identity: owner mode must not need either.
+        os.environ["BUZZ_AGENT_HOME"] = str(self.root / "empty-home")
+        self.locks = self.root / "pilot-state" / "protocol-publishes"
+        self.env_log = self.root / "env.jsonl"
+        self.owner_env = {
+            "BUZZ_COMMS_OWNER_AGENT": "codex",
+            "BUZZ_COMMS_OWNER_REPO": "alpha",
+            "BUZZ_COMMS_OWNER_CHANNEL": self.CHANNEL,
+            "BUZZ_COMMS_OWNER_LOCKS": str(self.locks),
+            "BUZZ_COMMS_OWNER_BUZZ_BIN": str(self.fake_buzz),
+            "BUZZ_RELAY_URL": "https://owner-relay.example",
+            "BUZZ_PRIVATE_KEY": "owner-private",
+            "BUZZ_AUTH_TAG": '["auth","owner"]',
+            "BUZZ_COMMS_OWNER_NAMES": "Fleet Agent\nFirstMate\n",
+            "FAKE_BUZZ_ENV_LOG": str(self.env_log),
+        }
+        for name, value in self.owner_env.items():
+            os.environ[name] = value
+            self.addCleanup(os.environ.pop, name, None)
+
+    def owner(self, argv):
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            status = self.run_cli(["--owner"] + argv)
+        return status, stdout.getvalue()
+
+    def test_owner_call_posts_a_bare_seat_with_the_given_identity(self):
+        status, out = self.owner(["start", "u-1", "Beginne die Prüfung"])
+        self.assertEqual(0, status)
+        send = [c for c in self.calls() if c[:2] == ["messages", "send"]][0]
+        self.assertEqual(self.CHANNEL, send[send.index("--channel") + 1])
+        self.assertTrue(
+            self.sent_content().startswith("[AGENT-ACTIVITY:started:codex:u-1]: #\n\n")
+        )
+        environment = json.loads(self.env_log.read_text().splitlines()[0])
+        self.assertEqual("owner-private", environment["BUZZ_PRIVATE_KEY"])
+        self.assertEqual('["auth","owner"]', environment["BUZZ_AUTH_TAG"])
+        self.assertEqual("https://owner-relay.example", environment["BUZZ_RELAY_URL"])
+        payload = json.loads(out)
+        self.assertEqual(
+            ["accepted", "event_id", "repo_id", "agent", "phase", "channel_id", "buzz_url"],
+            list(payload),
+        )
+        self.assertEqual(("alpha", "codex", "start"),
+                         (payload["repo_id"], payload["agent"], payload["phase"]))
+        receipt = self.locks / "project-alpha-codex-start-u-1.lock" / "output.json"
+        self.assertEqual(payload, json.loads(receipt.read_text()))
+
+    def test_a_receipt_the_pilot_stored_still_deduplicates(self):
+        lock = self.locks / "project-alpha-codex-result-u-2.lock"
+        lock.mkdir(parents=True)
+        stored = {"event_id": "e" * 64, "accepted": True, "duplicate": False,
+                  "repo_id": "alpha", "agent": "codex", "phase": "result"}
+        (lock / "output.json").write_text(json.dumps(stored) + "\n")
+        status, out = self.owner(["result", "u-2", "a" * 64, "Anderer Text"])
+        self.assertEqual(0, status)
+        self.assertEqual([], self.calls())
+        self.assertEqual(dict(stored, duplicate=True), json.loads(out))
+
+    def test_variables_without_the_flag_change_nothing(self):
+        os.environ["BUZZ_AGENT_HOME"] = str(self.home)
+        os.chdir(self.workspace)
+        self.assertEqual(0, self.run_cli(["start", "u-1", "Beginne"]))
+        send = [c for c in self.calls() if c[:2] == ["messages", "send"]][0]
+        self.assertEqual("11111111-1111-1111-1111-111111111111",
+                         send[send.index("--channel") + 1])
+        self.assertIn("claude.stratos", self.sent_content())
+        self.assertFalse(self.locks.exists())
+
+    def test_every_variable_is_required(self):
+        for name in project_buzz.OWNER_VARIABLES + ("BUZZ_COMMS_OWNER_AGENT",):
+            with self.subTest(missing=name):
+                os.environ.pop(name)
+                try:
+                    self.assertEqual(1, self.owner(["start", "u-1", "Beginne"])[0])
+                finally:
+                    os.environ[name] = self.owner_env[name]
+        self.assertEqual([], self.calls())
+
+    def test_names_come_from_the_pilot_never_from_the_relay(self):
+        self.assertEqual(1, self.owner(["start", "u-1", "@Fleet Agent mach das"])[0])
+        self.assertEqual([], self.calls())
+        self.assertEqual(0, self.owner(["start", "u-2", "Post an team@example.org"])[0])
+        self.assertEqual([["messages", "send"]], [c[:2] for c in self.calls()])
+        os.environ["BUZZ_COMMS_OWNER_NAMES"] = ""
+        self.assertEqual(1, self.owner(["start", "u-3", "Post an team@example.org"])[0])
+        self.assertEqual(1, len(self.calls()))
+
+    def test_another_repo_or_command_is_refused(self):
+        self.assertEqual(1, self.owner(["start", "u-1", "Beginne", "beta"])[0])
+        self.assertEqual(1, self.owner(["doctor"])[0])
+        self.assertEqual(1, self.owner(["routine", "2026-11-08", "a" * 16, "Text"])[0])
+        os.environ["BUZZ_COMMS_OWNER_AGENT"] = "Codex Agent"
+        self.assertEqual(1, self.owner(["start", "u-1", "Beginne"])[0])
+        self.assertEqual([], self.calls())
+
+    def test_reads_need_no_seat(self):
+        os.environ.pop("BUZZ_COMMS_OWNER_AGENT")
+        self.assertEqual(0, self.owner(["open", "50"])[0])
+        self.assertEqual(1, self.owner(["start", "u-1", "Beginne"])[0])
+        self.assertEqual([["messages", "get"]], [c[:2] for c in self.calls()])
+
+    def test_context_all_passes_the_raw_read_through(self):
+        events = [{"id": "m1", "pubkey": "p" * 64, "created_at": 5,
+                   "content": "[FABRIK-AUFTRAG:scout:x] Auftrag", "tags": [["h", "x"]]}]
+        os.environ["FAKE_BUZZ_MESSAGES"] = json.dumps(events)
+        status, out = self.owner(["context", "30", "--all"])
+        self.assertEqual(0, status)
+        self.assertEqual(events, json.loads(out))
+        self.assertEqual(
+            [["messages", "get", "--channel", self.CHANNEL, "--limit", "30"]], self.calls()
+        )
 
 
 class OpenView(HelperTestCase):

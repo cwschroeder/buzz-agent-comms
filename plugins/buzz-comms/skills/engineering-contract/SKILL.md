@@ -6,7 +6,7 @@ description: >-
   worktrees, contributor-owned branches and merge requests, maintainer-only
   merges, deployments and infrastructure changes, contributing over the Buzz
   git remote, cohesive simplicity, security rules that hold in a diff,
-  Impeccable for UI design, and verified local AI when customer data is
+  Impeccable and Taste for UI design, and verified local AI when customer data is
   involved. Use whenever an agent plans, changes, reviews, tests, builds,
   deploys, or diagnoses a software project.
 ---
@@ -221,12 +221,37 @@ Before UI editing:
 3. Read the project's `PRODUCT.md`, `DESIGN.md`, relevant surface brief, and a
    representative source of the shipped visual system.
 4. Load Impeccable's craft floor immediately before editing UI.
-5. Use its bounded inspection cycle for the relevant desktop, mobile, or native
-   surfaces. Keep review-ready screenshots distinct from screenshots captured
-   after a maintainer deployment on the canonical runtime.
+5. Verify the rendered result with Impeccable's own verification rules for the
+   relevant desktop, mobile, or native surfaces. Keep review-ready screenshots
+   distinct from screenshots captured after a maintainer deployment on the
+   canonical runtime.
 
 Do not substitute an ad hoc visual pass when Impeccable applies. Preserve its
 own refinement, redesign, product-truth, and verification rules.
+
+### Public company pages: Taste owns the build
+
+The Taste skill (`design-taste-frontend`, listed under the `taste-skill:`
+namespace when installed as a plugin) builds public company websites: landing
+pages, company and product sites, shops, studios. Impeccable and Taste each
+bring their own direction step and their
+own finish gate, so running both on one page mixes two rule sets. One design
+skill owns a run:
+
+- Taste owns a new or redesigned public company page when it is installed and
+  the project has no shipped `DESIGN.md` for that surface, or the user asked to
+  replace it. Follow Taste's own run, house rules, and finish gate for that
+  page.
+- Impeccable owns everything else: app screens, dashboards, forms, settings,
+  documentation, design systems, and every page that extends a shipped
+  `DESIGN.md`.
+- Without Taste, Impeccable owns public pages too. Taste is optional, so its
+  absence never stops the work; say once that the page was built without it.
+- Impeccable stays required for all UI work. A Taste build still starts with
+  steps 1 and 3 above, and the shipped result is recorded in `DESIGN.md` with
+  Impeccable's `document` command.
+
+Name the owning skill in the result.
 
 ## Customer data and model routing
 

@@ -195,3 +195,20 @@ benennen den Eintrag, den sie richtigstellen. Nichts wird gelöscht.
   Fortschrittsbeitrag beweist keinen Datei-Upload.
 - Die Folge Störung, Erholung, Störung enthält drei relevante Zustände.
   Tagesweite Inhalts-Deduplizierung würde den dritten verschlucken.
+
+## 2026-11-12 - Impeccable und Taste auf derselben Seite (claude)
+
+- Beide Skills melden sich für Landingpages und bringen je einen eigenen
+  Richtungsschritt und eine eigene Abschlussprüfung mit. Impeccable verlangt
+  für eine neue visuelle Welt ausdrücklich sein eigenes Würfelskript, Taste
+  sein eigenes. Deshalb regelt der Vertrag seit 0.34.0 genau einen Besitzer
+  je Lauf, statt beide zu kombinieren.
+- Taste 2.5.1 bringt im SKILL.md-Frontmatter einen `Stop`-Hook mit, der sein
+  Abschluss-Gate bis zu 600 s laufen lässt. Ein langer Abschluss nach einer
+  Taste-Seite ist also erwartet und kein Hänger.
+- Impeccable 4.8.2 hat die Formulierung „bounded passes“ gestrichen. Der
+  Vertrag verweist deshalb nur noch auf Impeccables eigene Prüfregeln, ohne
+  deren Wortlaut nachzubauen.
+- Beide Skills sind zu groß zum Vendieren (Impeccable mit eigenem Binary,
+  Taste rund 37 MB mit Fotos). Das Plugin regelt sie und prüft sie im Setup,
+  liefert sie aber nicht mit.

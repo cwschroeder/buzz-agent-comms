@@ -133,9 +133,11 @@ class CommunicationContract(HelperTestCase):
         lock.mkdir(parents=True)
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
-            self.assertEqual(1, self.run_cli(
+            # 75 (EX_TEMPFAIL) like the owner's pilot: retry, not refused.
+            self.assertEqual(75, self.run_cli(
                 ['progress', 'stale-1', 'b' * 64, 'Text', 'codeapp']))
         message = err.getvalue()
+        self.assertIn('still being published', message)
         self.assertIn('retry with the same update ID', message)
         self.assertIn('docs/COMMUNICATION-ROLLOUT.md', message)
         self.assertIn(str(lock), message)
